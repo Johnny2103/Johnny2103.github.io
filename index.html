@@ -2,441 +2,654 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>Wirtschaftlichkeits-Analyse Pro</title>
-
-  <!-- Charts -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js" crossorigin="anonymous"></script>
-
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>U‑Wert Berechnung von Jonnathan · Pro Version</title>
+  <meta name="description" content="U‑Wert‑Rechner mit erweiterter Materialbibliothek (SIA D0170), Oberflächenübergängen, JSON/CSV‑Export und Temperaturprofil‑Diagramm" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <style>
-    :root{--primary:#0f766e;--primary-dark:#134e4a;--text:#1f2937;--muted:#6b7280;--border:#d1d5db;--bg:#f8fafc;--bg2:#fff;--head:#f1f5f9;--total:#e2e8f0}
-    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif}
-    .toolbar{position:sticky;top:0;z-index:10;background:var(--bg2);border-bottom:1px solid var(--border);padding:.75rem 1rem;display:flex;gap:.5rem;align-items:center;justify-content:space-between}
-    .btn{border:1px solid var(--border);background:var(--bg2);padding:.5rem .75rem;border-radius:.5rem;cursor:pointer}
-    .btn-primary{background:var(--primary);border-color:var(--primary);color:#fff}
-    .container{max-width:1200px;margin:0 auto;padding:1rem}
-    .page{background:var(--bg2);border:1px solid var(--border);border-radius:.75rem;padding:1.5rem;margin-bottom:1.5rem}
-    .page-title{margin:.25rem 0 1rem 0;color:var(--primary)}
-    .input-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;background:#f6f7fb;border:1px solid var(--border);border-radius:.5rem;padding:1rem}
-    .input-group{display:flex;flex-direction:column;gap:.25rem}
-    .input-group input{padding:.6rem;border:1px solid var(--border);border-radius:.375rem}
-    .section-title{margin:1.5rem 0 .5rem 0;border-bottom:2px solid var(--primary);padding-bottom:.25rem;color:var(--primary)}
-    .table-container{overflow:hidden;border:1px solid var(--border);border-radius:.75rem;margin-bottom:1rem}
-    table{width:100%;border-collapse:collapse;font-size:.93rem}
-    th{background:var(--head);text-align:left;padding:.7rem .6rem}
-    td{border-top:1px solid var(--border);padding:.5rem .6rem;vertical-align:middle}
-    tfoot td{background:var(--total);font-weight:700}
-    .numeric{text-align:right;font-variant-numeric:tabular-nums}
-    .table-input{width:100%;border:none;background:transparent;padding:.35rem}
-    .table-input.readonly{color:#4b5563}
-    .calculated{background:linear-gradient(90deg,transparent,rgba(15,118,110,.08))}
-    .sidebar{background:var(--bg2);border:1px solid var(--border);border-radius:.75rem;padding:1rem}
-    .grid{display:grid;grid-template-columns:1fr 340px;gap:1rem}
-    @media (max-width:1024px){.grid{grid-template-columns:1fr}}
+    :root {
+      --bg:#0b1220; --panel:#ffffff; --muted:#ffffff; --text:#000000; --dim:#000000; --bord:#a7a7a7; --brand:#60a5fa; --accent:#22d3ee; --ok:#10b981; --err:#ef4444;
+      --r:12px; --shadow:0 10px 30px -10px rgb(0 0 0 / .6);
+    }
+    *{box-sizing:border-box}
+    body{margin:0; font-family: ui-sans-serif,system-ui,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; background:linear-gradient(180deg,#0b1220,#111827 60%,#0f172a); color:var(--text); line-height:1.5}
+    .wrap{max-width:1400px; margin:20px auto; padding:0 16px}
+    .card{background:var(--panel); border:1px solid var(--bord); border-radius:var(--r); box-shadow:var(--shadow)}
+    header.card{padding:20px 24px; display:grid; gap:16px}
+    h1 {
+  font-size: clamp(1.2rem, 2.5vw, 1.7rem);
+  font-weight: 800;
+  margin: 0;
+
+  /* Verlauf */
+  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+
+  /* Hier die beiden wichtigen Zeilen */
+  -webkit-background-clip: text; /* für ältere Safari/Chrome */
+  background-clip: text;         /* Standard */
+
+  -webkit-text-fill-color: transparent; /* Safari braucht das */
+  color: transparent; /* Fallback */
+}
+
+    
+    /* Toolbar optimiert */
+    .toolbar{display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; align-items:end}
+    @media (max-width: 768px){
+      .toolbar{grid-template-columns:1fr 1fr}
+    }
+    
+    /* Inputs & Buttons */
+    label{display:flex; flex-direction:column; gap:4px; font-size:.85rem; color:var(--dim); font-weight:600}
+    input, select, button{border-radius:8px; border:1px solid var(--bord); background:var(--muted); color:var(--text); padding:8px 10px; font-weight:500; font-size:.9rem; transition:all .2s}
+    input[type=number]{text-align:center; width:100%}
+    input:focus, select:focus{outline:none; border-color:var(--brand); box-shadow:0 0 0 3px rgb(96 165 250 / .1)}
+    button{cursor:pointer; white-space:nowrap; font-weight:600}
+    button.primary{background:linear-gradient(135deg,#1d4ed8,#2563eb); border-color:#3871ff66; color:white}
+    button.primary:hover{background:linear-gradient(135deg,#1e40af,#1d4ed8)}
+    button.ghost{background:transparent; border-color:var(--bord)}
+    button.ghost:hover{background:var(--muted)}
+    button:disabled{opacity:.6; cursor:not-allowed}
+
+    /* Tabelle kompakter und responsiver */
+    .table-wrap{overflow:auto; border:1px solid var(--bord); border-radius:10px}
+    table{width:100%; border-collapse:collapse; min-width:800px; font-size:.9rem}
+    th,td{padding:8px 6px; border-bottom:1px solid var(--bord); text-align:center; white-space:nowrap}
+    thead th{position:sticky; top:0; background:#dfdfdf; z-index:1; color:var(--dim); font-size:.75rem; letter-spacing:.04em; text-transform:uppercase; font-weight:700; padding:10px 6px}
+    td.al{text-align:left; white-space:normal; min-width:200px}
+    
+    /* Spaltenbreiten optimiert */
+    table th:nth-child(1), table td:nth-child(1){width:40px}
+    table th:nth-child(2), table td:nth-child(2){width:250px}
+    table th:nth-child(3), table td:nth-child(3){width:80px}
+    table th:nth-child(4), table td:nth-child(4){width:80px}
+    table th:nth-child(5), table td:nth-child(5){width:90px}
+    table th:nth-child(6), table td:nth-child(6){width:80px}
+    table th:nth-child(7), table td:nth-child(7){width:100px}
+    table th:nth-child(8), table td:nth-child(8){width:120px}
+    
+    /* Eingabefelder in Tabelle */
+    table input{padding:4px 6px; font-size:.85rem; width:100%; min-width:60px}
+    table select{padding:4px 6px; font-size:.85rem; width:100%}
+    
+    /* Action Buttons kompakter */
+    .actions{display:flex; justify-content:center; gap:2px}
+    .actions button{padding:4px 6px; font-size:.75rem; border-radius:4px; min-width:24px}
+    
+    .section{padding:16px 20px}
+    .stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px}
+    .stat{background:var(--muted); border:1px solid var(--bord); border-radius:8px; padding:14px}
+    .stat .k{color:var(--dim); font-weight:700; font-size:.75rem; text-transform:uppercase; letter-spacing:.03em}
+    .stat .v{font-weight:800; font-size:1.3rem; margin-top:2px; color:var(--text)}
+    .badge{display:inline-flex; gap:6px; align-items:center; font-weight:800; font-size:.8rem}
+    .ok{color:var(--ok)}
+    .bad{color:var(--err)}
+    
+    /* Chart optimiert */
+    .chart{padding:20px; min-height:300px}
+    .chart canvas{max-height:280px}
+    
+    .hint{color:var(--dim); font-size:.8rem; line-height:1.4}
+    .footer{margin-top:20px; color:var(--dim); font-size:.8rem; text-align:center; padding:10px}
+    .sr{position:absolute;left:-9999px}
+    
+    /* Mobile Optimierungen */
+    @media (max-width: 768px){
+      .wrap{margin:10px auto; padding:0 12px}
+      header.card{padding:16px 18px}
+      .stats{grid-template-columns:1fr 1fr}
+      .stat{padding:10px}
+      .stat .v{font-size:1.1rem}
+      table{font-size:.8rem}
+      th,td{padding:6px 4px}
+      table input, table select{font-size:.8rem}
+    }
+    
+    @media (max-width: 480px){
+      .stats{grid-template-columns:1fr}
+      .toolbar{grid-template-columns:1fr; gap:8px}
+      table th:nth-child(2), table td:nth-child(2){min-width:180px}
+    }
   </style>
 </head>
 <body>
-  <div class="toolbar">
-    <div style="display:flex;gap:.5rem;align-items:center">
-      <button class="btn" onclick="printAll()">🖨️ Drucken</button>
-      <!-- Excel-Button und -Funktion entfernt -->
-      <button class="btn btn-primary" onclick="addNewPage()">➕ Neue Seite</button>
+  <div class="wrap">
+    <header class="card">
+      <h1>U‑Wert Berechnung</h1>
+      <div class="toolbar">
+        <label>Innen [°C] <input type="number" step="0.1" id="t_in" value="20"></label>
+        <label>Aussen [°C] <input type="number" step="0.1" id="t_out" value="-10"></label>
+        <label>h<sub>hi</sub> [W/m²K] <input type="number" step="0.1" min="0.01" id="h_in" value="8"></label>
+        <label>h<sub>he</sub> [W/m²K] <input type="number" step="0.1" min="0.01" id="h_out" value="25"></label>
+        <button id="addLayer" class="primary">+ Schicht</button>
+        <button id="exportJson">Export JSON</button>
+        <label for="importJson" class="ghost" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">Import JSON<input id="importJson" type="file" accept="application/json" hidden></label>
+        <button id="exportCsv" class="ghost">Export CSV</button>
+        <button id="reset" class="ghost">Zurücksetzen</button>
+      </div>
+      <div class="hint">Hinweis: Materialwerte stammen aus SIA D0170 (vereinfachter Auszug). λ‑Werte können jederzeit manuell angepasst werden.</div>
+    </header>
+
+    <section class="card section" aria-label="Schichten">
+      <div class="table-wrap" style="overflow:auto;border:1px solid var(--bord);border-radius:10px">
+        <table id="tbl">
+          <thead>
+            <tr>
+              <th>Nr.</th>
+              <th class="al">Material (Bibliothek)</th>
+              <th>Dicke<br><small>[m]</small></th>
+              <th>λ<br><small>[W/m·K]</small></th>
+              <th>R<sub>hi</sub><br><small>[m²K/W]</small></th>
+              <th>ΔT<sub>hi</sub><br><small>[K]</small></th>
+              <th>T nach Schicht<br><small>[°C]</small></th>
+              <th>Aktionen</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <div class="hint" style="margin-top:12px; padding:8px 12px; background:var(--muted); border-radius:6px">
+        💡 <strong>Tastatur-Shortcuts:</strong> <kbd style="background:var(--bord);padding:2px 6px;border-radius:4px;font-size:.75rem">Enter</kbd> = Schicht hinzufügen · <kbd style="background:var(--bord);padding:2px 6px;border-radius:4px;font-size:.75rem">Entf</kbd> = letzte Schicht entfernen
+      </div>
+    </section>
+
+    <section class="card section" aria-label="Ergebnisse">
+      <div class="stats">
+        <div class="stat"><div class="k">Gesamtwiderstand R<sub>tot</sub></div><div class="v" id="Rtot">–</div></div>
+        <div class="stat"><div class="k">U‑Wert</div><div class="v" id="Uwert">–</div></div>
+        <div class="stat"><div class="k">Gesamtdicke</div><div class="v" id="sumD">–</div></div>
+        <div class="stat"><div class="k">Wärmestrom q</div><div class="v" id="q">–</div></div>
+        <div class="stat"><div class="k">Σ ΔT vs. (T<sub>hi</sub>−T<sub>he</sub>)</div><div class="v"><span id="sumDT">–</span> <span id="check" class="badge"> </span></div></div>
+      </div>
+    </section>
+
+    <section class="card chart" aria-label="Temperaturprofil">
+      <canvas id="chart"></canvas>
+    </section>
+
+    <div class="footer">
+      <div style="display:flex;align-items:center;justify-content:center;gap:8px">
+        🏗️ <strong>U‑Wert Rechner</strong> · Pro Version · Materialwerte nach SIA D0170
+      </div>
     </div>
-    <div id="status" style="color:#64748b">Bereit</div>
   </div>
 
-  <div class="container">
-    <div class="grid">
-      <div id="pages-container"></div>
+<script>
+// =============================
+// Materialbibliothek (Auszug SIA D0170)
+// =============================
+const MATERIALS = [
+  // Mauerwerk
+  {id:'modulbackstein-einstein', group:'Mauerwerk', name:'Modulbackstein (Einstein) ρ≈1100', lambda:0.44},
+  {id:'modulbackstein-verband', group:'Mauerwerk', name:'Modulbackstein (Verband) ρ≈1100', lambda:0.37},
+  {id:'isolierbackstein', group:'Mauerwerk', name:'Isolierbackstein ρ≈1200', lambda:0.47},
+  {id:'sichtbackstein', group:'Mauerwerk', name:'Sichtbackstein ρ≈1400', lambda:0.52},
+  {id:'kaminstein', group:'Mauerwerk', name:'Kaminstein ρ≈1800', lambda:0.80},
+  {id:'kalksandstein-1600', group:'Mauerwerk', name:'Kalksandstein ρ≈1600', lambda:0.80},
+  {id:'kalksandstein-1800', group:'Mauerwerk', name:'Kalksandstein ρ≈1800', lambda:1.00},
+  {id:'kalksandstein-2000', group:'Mauerwerk', name:'Kalksandstein ρ≈2000', lambda:1.10},
+  {id:'zementstein', group:'Mauerwerk', name:'Zementstein ρ≈2000', lambda:1.10},
+  {id:'zementblockstein', group:'Mauerwerk', name:'Zementblockstein ρ≈1200', lambda:0.70},
+  {id:'porenbeton-300', group:'Mauerwerk', name:'Porenbetonstein ρ≈300', lambda:0.10},
+  {id:'porenbeton-400', group:'Mauerwerk', name:'Porenbetonstein ρ≈400', lambda:0.13},
+  {id:'porenbeton-500', group:'Mauerwerk', name:'Porenbetonstein ρ≈500', lambda:0.16},
+  {id:'porenbeton-600', group:'Mauerwerk', name:'Porenbetonstein ρ≈600', lambda:0.19},
+  // Beton
+  {id:'beton-1800', group:'Beton', name:'Beton ρ≈1800', lambda:1.15},
+  {id:'beton-2000', group:'Beton', name:'Beton ρ≈2000', lambda:1.35},
+  {id:'beton-2200', group:'Beton', name:'Beton ρ≈2200', lambda:1.65},
+  {id:'beton-2400', group:'Beton', name:'Beton (hoch) ρ≈2400', lambda:2.00},
+  {id:'beton-armi-1', group:'Beton', name:'Beton armiert (~1% Stahl)', lambda:2.30},
+  {id:'beton-armi-2', group:'Beton', name:'Beton armiert (~2% Stahl)', lambda:2.50},
+  // Putze & Mörtel
+  {id:'innenputz', group:'Putze', name:'Innenputz (allg.) ρ≈1400', lambda:0.70},
+  {id:'aussenputz', group:'Putze', name:'Aussenputz (allg.) ρ≈1800', lambda:0.87},
+  {id:'wd-putz-300', group:'Putze', name:'Wärmedämmputz ρ≈300', lambda:0.08},
+  {id:'wd-putz-450', group:'Putze', name:'Wärmedämmputz ρ≈450', lambda:0.14},
+  {id:'kalkmoertel', group:'Putze', name:'Kalkmörtel ρ≈1800', lambda:0.87},
+  {id:'kalkzement', group:'Putze', name:'Kalkzementmörtel ρ≈1900', lambda:1.00},
+  {id:'zementmoertel', group:'Putze', name:'Zementmörtel ρ≈2200', lambda:1.40},
+  {id:'gipsdaemmputz', group:'Putze', name:'Gipsdämmputz ρ≈600', lambda:0.18},
+  // Gips
+  {id:'gips-600', group:'Gips', name:'Gips ρ≈600', lambda:0.18},
+  {id:'gips-900', group:'Gips', name:'Gips ρ≈900', lambda:0.30},
+  {id:'gips-1200', group:'Gips', name:'Gips ρ≈1200', lambda:0.43},
+  {id:'gips-1500', group:'Gips', name:'Gips ρ≈1500', lambda:0.56},
+  {id:'gipskarton', group:'Gips', name:'Gipskartonplatte ρ≈900', lambda:0.25},
+  // Holz / Holzwerkstoffe
+  {id:'holz-500', group:'Holz', name:'Nutzholz ρ≈500', lambda:0.13},
+  {id:'holz-700', group:'Holz', name:'Nutzholz ρ≈700', lambda:0.18},
+  {id:'holzfaser-250', group:'Holz', name:'Holzfaserplatte ρ≈250', lambda:0.07},
+  {id:'holzfaser-400', group:'Holz', name:'Holzfaserplatte ρ≈400', lambda:0.10},
+  {id:'holzfaser-600', group:'Holz', name:'Holzfaserplatte ρ≈600', lambda:0.14},
+  {id:'holzfaser-800', group:'Holz', name:'Holzfaserplatte ρ≈800', lambda:0.18},
+  {id:'span-300', group:'Holz', name:'Spanplatte ρ≈300', lambda:0.10},
+  {id:'span-600', group:'Holz', name:'Spanplatte ρ≈600', lambda:0.14},
+  {id:'span-900', group:'Holz', name:'Spanplatte ρ≈900', lambda:0.18},
+  {id:'zementspan-1200', group:'Holz', name:'Zementgebundene Spanplatte ρ≈1200', lambda:0.23},
+  // Dämmstoffe (ergänzt)
+  {id:'mineralwolle', group:'Dämmung', name:'Mineralwolle', lambda:0.040},
+  {id:'eps', group:'Dämmung', name:'EPS (weiss)', lambda:0.035},
+  {id:'xps', group:'Dämmung', name:'XPS', lambda:0.032},
+  {id:'pir', group:'Dämmung', name:'PUR/PIR', lambda:0.026},
+  // Verschiedene
+  {id:'glas', group:'Verschiedenes', name:'Floatglas', lambda:1.00},
+  {id:'quarzglas', group:'Verschiedenes', name:'Quarzglas', lambda:1.40},
+  {id:'pvc', group:'Verschiedenes', name:'PVC', lambda:0.17},
+  {id:'kunststoff', group:'Verschiedenes', name:'Kunststoff (allg.)', lambda:0.20},
+  {id:'keramik', group:'Verschiedenes', name:'Keramik/Porzellan', lambda:1.30},
+  {id:'naturkautschuk', group:'Verschiedenes', name:'Naturkautschuk', lambda:0.13},
+  {id:'neopren', group:'Verschiedenes', name:'Neopren', lambda:0.23},
+  {id:'butyl', group:'Verschiedenes', name:'Butylkautschuk', lambda:0.24},
+  // Metalle (nur für Spezialfälle / Wärmebrücken)
+  {id:'alu', group:'Metalle', name:'Aluminiumlegierung', lambda:160.0},
+  {id:'stahl', group:'Metalle', name:'Stahl', lambda:50.0},
+  {id:'nirosta', group:'Metalle', name:'Nichtrostender Stahl', lambda:17.0}
+];
+const MAT_BY_ID = Object.fromEntries(MATERIALS.map(m=>[m.id,m]));
 
-      <aside class="sidebar">
-        <h3 style="margin-top:0">📊 Übersicht</h3>
-        <div>Gesamtkosten: <strong id="totalCostAll">0 CHF</strong></div>
-        <div>Günstigste Variante: <strong id="cheapestVariant">-</strong></div>
-        <div style="margin-top:1rem">
-          <canvas id="costChart" height="220"></canvas>
-          <div style="font-size:.85rem;color:#64748b;margin-top:.25rem">
-            Diagramm: gestapelte Balken (Kapital, Betrieb, Energie) je Variante
-          </div>
-        </div>
-      </aside>
-    </div>
-  </div>
+// =============================
+// Zustand & Persistenz
+// =============================
+const State = {
+  t_in: 20, t_out: -10, h_in: 8, h_out: 25,
+  rows: [
+    {matId:'gipskarton', name:'Gipskartonplatte ρ≈900', d:0.0125, lambda:0.25},
+    {matId:'mineralwolle', name:'Mineralwolle', d:0.12, lambda:0.040},
+    {matId:'modulbackstein-verband', name:'Modulbackstein (Verband) ρ≈1100', d:0.24, lambda:0.37}
+  ]
+};
+const load = ()=>{ 
+  try{ 
+    const s = localStorage.getItem('uvalue-pro'); 
+    if(s){ 
+      const o = JSON.parse(s); 
+      Object.assign(State, o); 
+    } 
+  } catch(e) {
+    console.warn('Fehler beim Laden der Daten:', e);
+  } 
+};
+const save = () => {
+  try {
+    localStorage.setItem('uvalue-pro', JSON.stringify(State));
+  } catch(e) {
+    console.warn('Fehler beim Speichern der Daten:', e);
+  }
+};
 
-  <script>
-    // ========= Settings / State =========
-    let pageCount = 1;
-    const settings = { currency:'CHF', interestRate:4.0, inflation:2.0 };
-    let costChart = null;
+// =============================
+// Utilities
+// =============================
+const $ = (s, el = document) => el.querySelector(s);
+const nf = (v, d = 3) => {
+  if (!Number.isFinite(v)) return '–';
+  const minDigits = Math.min(d, v !== 0 ? 2 : 0);
+  return new Intl.NumberFormat('de-CH', {
+    maximumFractionDigits: d, 
+    minimumFractionDigits: minDigits
+  }).format(v);
+};
 
-    // ========= Helpers =========
-    function setStatus(t){ const s=document.getElementById('status'); if(!s) return; s.textContent=t; setTimeout(()=>s.textContent='Bereit',1500); }
-    function parseNumber(v){ if(typeof v!=='string') return parseFloat(v)||0; return parseFloat(v.replace(/[^\d.-]/g,'').replace(',','.'))||0; }
-    function formatCurrency(v){ return new Intl.NumberFormat('de-CH',{style:'currency',currency:settings.currency,minimumFractionDigits:2}).format(Number(v)||0); }
+// =============================
+// Rendering
+// =============================
+const tbody = document.getElementById('tbody');
+function materialSelectHtml(rowIndex, matId){
+  const groups = [...new Set(MATERIALS.map(m => m.group))];
+  let html = `<select class="mat" data-idx="${rowIndex}"><option value="">— Material wählen —</option>`;
+  for(const g of groups){
+    html += `<optgroup label="${g}">`;
+    html += MATERIALS.filter(m => m.group === g).map(m => 
+      `<option value="${m.id}" ${m.id === matId ? 'selected' : ''}>${m.name} (λ ${m.lambda})</option>`
+    ).join('');
+    html += `</optgroup>`;
+  }
+  html += `</select>`; 
+  return html;
+}
 
-    // ========= Page =========
-    function createPageHTML(pageNum){
-      return `
-      <div class="page" data-page="${pageNum}">
-        <h2 class="page-title">Wirtschaftlichkeitsberechnung:  Variante ${pageNum}</h2>
+function render(){
+  // Header inputs
+  $('#t_in').value = State.t_in; 
+  $('#t_out').value = State.t_out; 
+  $('#h_in').value = State.h_in; 
+  $('#h_out').value = State.h_out;
 
-        <div class="input-grid">
-          <div class="input-group">
-            <label>Nutzungsdauer (Jahre)</label>
-            <input id="duration-${pageNum}" type="number" min="1" step="1" value="30" oninput="calculate(${pageNum})">
-          </div>
-          <div class="input-group">
-            <label>Zinssatz i (%)</label>
-            <input id="interest-${pageNum}" type="number" step="0.1" value="${settings.interestRate}" oninput="calculate(${pageNum})">
-          </div>
-          <div class="input-group">
-            <label>Preisteigerung f (%/Jahr)</label>
-            <input id="inflation-${pageNum}" type="number" step="0.1" value="${settings.inflation}" oninput="calculate(${pageNum})">
-          </div>
-          <div class="input-group">
-            <label>Variante</label>
-            <input id="variant-${pageNum}" type="text" placeholder="Bezeichnung" oninput="updateAnalytics()">
-          </div>
-        </div>
+  tbody.innerHTML = '';
+  let R_layers = 0, sumD = 0;
+  const rowsEls = [];
+  
+  // Resistances
+  const Rsi = 1 / Math.max(State.h_in, 0.01);
+  const Rse = 1 / Math.max(State.h_out, 0.01);
 
-        <!-- 1. Investition -->
-        <h3 class="section-title">💰 1. Investition</h3>
-        <div class="table-container">
-          <table id="invest-table-${pageNum}">
-            <thead>
-              <tr>
-                <th>Anlageteil</th>
-                <th class="numeric">Investitionsausgaben</th>
-                <th class="numeric">Nutzungsdauer</th>
-                <th class="numeric">Annuitätsfaktor</th>
-                <th class="numeric">Jährliche Kapitalkosten</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              ${Array(3).fill().map((_,i)=>`
-              <tr>
-                <td><input class="table-input" placeholder="z. B. Gerät ${i+1}"></td>
-                <td><input class="table-input numeric invest-amount" type="number" step="0.05" oninput="calculate(${pageNum})"></td>
-                <td><input class="table-input numeric usage-duration" type="number" step="1" oninput="calculate(${pageNum})"></td>
-                <td><input class="table-input numeric annuity-factor calculated readonly" readonly></td>
-                <td><input class="table-input numeric annual-capital calculated readonly" readonly></td>
-                <td><button class="btn" onclick="deleteRow(this)">🗑️</button></td>
-              </tr>`).join('')}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td><strong>Total</strong></td><td></td><td></td><td></td>
-                <td class="numeric"><input id="capital-total-${pageNum}" class="table-input numeric calculated readonly" readonly></td>
-                <td></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+  // --- 1) Erste fixe Zeile: Wärmeübergang innen ---
+  const trIn = document.createElement('tr');
+  trIn.innerHTML = `
+    <td>1</td>
+    <td class="al">Wärmeübergang innen (h = ${nf(State.h_in)})</td>
+    <td>–</td><td>–</td>
+    <td>${nf(Rsi)}</td>
+    <td class="dTi"></td>
+    <td class="Ti"></td>
+    <td></td>`;
+  tbody.appendChild(trIn);
 
-        <!-- 2. Betrieb -->
-        <h3 class="section-title">🔧 2. Jährliche Betriebskosten</h3>
-        <div class="table-container">
-          <table id="operating-table-${pageNum}">
-            <thead><tr><th>Posten</th><th class="numeric">Aufwand</th><th class="numeric">Wartung</th><th class="numeric">Jährliche Betriebskosten</th><th></th></tr></thead>
-            <tbody>
-              ${Array(2).fill().map(()=>`
-              <tr>
-                <td><input class="table-input" placeholder="z. B. Service"></td>
-                <td><input class="table-input numeric expense" type="number" step="0.05" oninput="calculate(${pageNum})"></td>
-                <td><input class="table-input numeric maintenance" type="number" step="0.05" oninput="calculate(${pageNum})"></td>
-                <td><input class="table-input numeric operating-cost calculated readonly" readonly></td>
-                <td><button class="btn" onclick="deleteRow(this)">🗑️</button></td>
-              </tr>`).join('')}
-            </tbody>
-            <tfoot><tr><td><strong>Total</strong></td><td></td><td></td><td><input id="operating-total-${pageNum}" class="table-input numeric calculated readonly" readonly></td><td></td></tr></tfoot>
-          </table>
-        </div>
+  // --- 2) Materialschichten ---
+  State.rows.forEach((r, i) => {
+    const R = (r.lambda > 0 && r.d > 0) ? r.d / r.lambda : 0; 
+    R_layers += R; 
+    sumD += (r.d || 0);
+    
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${i + 2}</td>
+      <td class="al">${materialSelectHtml(i, r.matId || '')}</td>
+      <td><input type="number" class="d" data-idx="${i}" step="0.001" min="0" value="${r.d ?? 0}"></td>
+      <td><input type="number" class="lam" data-idx="${i}" step="0.001" min="0" value="${r.lambda ?? 0}"></td>
+      <td>${R ? nf(R) : ''}</td>
+      <td class="dTi"></td>
+      <td class="Ti"></td>
+      <td class="actions">
+        <button class="up" data-idx="${i}">▲</button>
+        <button class="down" data-idx="${i}">▼</button>
+        <button class="del" data-idx="${i}">✖</button>
+      </td>`;
+    tbody.appendChild(tr); 
+    rowsEls.push(tr);
+  });
 
-        <!-- 3. Energie -->
-        <h3 class="section-title">⚡ 3. Jährliche Energiekosten</h3>
-        <div class="table-container">
-          <table id="energy-table-${pageNum}">
-            <thead><tr><th>Energieträger</th><th class="numeric">Grundgebühr/Jahr</th><th class="numeric">Verbrauch</th><th class="numeric">Spezifische Kosten</th><th class="numeric">Jährliche Energiekosten</th><th></th></tr></thead>
-            <tbody>
-              ${Array(2).fill().map(()=>`
-              <tr>
-                <td><input class="table-input" placeholder="z. B. Strom"></td>
-                <td><input class="table-input numeric base-fee" type="number" step="0.05" oninput="calculate(${pageNum})"></td>
-                <td><input class="table-input numeric consumption" type="number" step="0.01" oninput="calculate(${pageNum})"></td>
-                <td><input class="table-input numeric specific-cost" type="number" step="0.0001" oninput="calculate(${pageNum})"></td>
-                <td><input class="table-input numeric energy-cost calculated readonly" readonly></td>
-                <td><button class="btn" onclick="deleteRow(this)">🗑️</button></td>
-              </tr>`).join('')}
-            </tbody>
-            <tfoot><tr><td><strong>Total</strong></td><td></td><td></td><td></td><td><input id="energy-total-${pageNum}" class="table-input numeric calculated readonly" readonly></td><td></td></tr></tfoot>
-          </table>
-        </div>
+  // --- 3) Letzte fixe Zeile: Wärmeübergang außen ---
+  const trOut = document.createElement('tr');
+  trOut.innerHTML = `
+    <td>${State.rows.length + 2}</td>
+    <td class="al">Wärmeübergang außen (h = ${nf(State.h_out)})</td>
+    <td>–</td><td>–</td>
+    <td>${nf(Rse)}</td>
+    <td class="dTi"></td>
+    <td class="Ti"></td>
+    <td></td>`;
+  tbody.appendChild(trOut);
 
-        <!-- 4. Zusammenfassung -->
-        <h3 class="section-title">📊 4. Total der mittleren jährlichen Kosten</h3>
-        <div class="table-container">
-          <table id="summary-table-${pageNum}">
-            <thead><tr><th>Faktor</th><th class="numeric">Mittelwertfaktor</th><th class="numeric">Jährliche Kosten</th><th class="numeric">Mittl. jährliche Kosten</th><th class="numeric">Anteil %</th></tr></thead>
-            <tbody>
-              <tr>
-                <td>💰 Kapitalkosten</td>
-                <td><input class="table-input numeric mean-factor calculated readonly" readonly></td>
-                <td><input id="annual-capital-${pageNum}" class="table-input numeric readonly calculated" readonly></td>
-                <td><input class="table-input numeric mean-cost calculated readonly" readonly></td>
-                <td><input class="table-input numeric percentage calculated readonly" readonly></td>
-              </tr>
-              <tr>
-                <td>🔧 Betriebskosten</td>
-                <td><input class="table-input numeric mean-factor calculated readonly" readonly></td>
-                <td><input id="annual-operating-${pageNum}" class="table-input numeric readonly calculated" readonly></td>
-                <td><input class="table-input numeric mean-cost calculated readonly" readonly></td>
-                <td><input class="table-input numeric percentage calculated readonly" readonly></td>
-              </tr>
-              <tr>
-                <td>⚡ Energiekosten</td>
-                <td><input class="table-input numeric mean-factor calculated readonly" readonly></td>
-                <td><input id="annual-energy-${pageNum}" class="table-input numeric readonly calculated" readonly></td>
-                <td><input class="table-input numeric mean-cost calculated readonly" readonly></td>
-                <td><input class="table-input numeric percentage calculated readonly" readonly></td>
-              </tr>
-            </tbody>
-            <tfoot><tr><td><strong>Gesamttotal</strong></td><td></td><td></td><td><input id="grand-total-${pageNum}" class="table-input numeric calculated readonly" readonly></td><td><strong>100%</strong></td></tr></tfoot>
-          </table>
-        </div>
+  // --- 4) Globale Kenngrößen ---
+  const Rtot = Rsi + R_layers + Rse;
+  const U = Rtot > 0 ? 1 / Rtot : 0;
+  const dT = State.t_in - State.t_out;
+  const q = Rtot > 0 ? dT / Rtot : 0;
 
-        <!-- 5. Faktoren-Übersicht -->
-        <h3 class="section-title">🧮 5. Faktoren-Übersicht</h3>
-        <div class="table-container">
-          <table id="factors-table-${pageNum}">
-            <thead>
-              <tr>
-                <th>Kategorie</th>
-                <th>Element</th>
-                <th class="numeric">Faktor</th>
-              </tr>
-            </thead>
-            <tbody>
-              <!-- wird durch calculate() befüllt -->
-            </tbody>
-          </table>
-        </div>
-      </div>`;
-    }
+  // --- 5) ΔT und Temperaturen je Zeile ---
+  // Start bei Innenluft
+  let runningT = State.t_in;
 
-    // ========= Calculation =========
-    function calculate(pageNum){
-      if (!document.getElementById(`invest-table-${pageNum}`)) return;
+  // Rsi-Zeile
+  let dTi = q * Rsi;
+  runningT -= dTi;
+  trIn.querySelector('.dTi').textContent = nf(dTi);
+  trIn.querySelector('.Ti').textContent  = nf(runningT, 1);
 
-      const interestRate   = parseNumber(document.getElementById(`interest-${pageNum}`)?.value)  || settings.interestRate;
-      const inflationRate  = parseNumber(document.getElementById(`inflation-${pageNum}`)?.value) || settings.inflation;
-      const projectDuration= parseNumber(document.getElementById(`duration-${pageNum}`)?.value)  || 20;
+  // Materialien
+  State.rows.forEach((r, i) => {
+    const R = (r.lambda > 0 && r.d > 0) ? r.d / r.lambda : 0;
+    const dTiLayer = q * R; 
+    runningT -= dTiLayer;
+    rowsEls[i].querySelector('.dTi').textContent = R ? nf(dTiLayer) : '';
+    rowsEls[i].querySelector('.Ti').textContent  = R ? nf(runningT, 1) : '';
+  });
 
-      // --- 1) Investition (CRF auf 3 Nachkommastellen) ---
-      const investRows = document.querySelectorAll(`#invest-table-${pageNum} tbody tr`);
-      let capitalTotal = 0;
-      investRows.forEach(row=>{
-        const amount        = parseNumber(row.querySelector('.invest-amount')?.value)   || 0;
-        const usageDuration = parseNumber(row.querySelector('.usage-duration')?.value)  || projectDuration;
-        const i = interestRate/100, n = usageDuration;
+  // Rse-Zeile
+  dTi = q * Rse;
+  runningT -= dTi;
+  trOut.querySelector('.dTi').textContent = nf(dTi);
+  trOut.querySelector('.Ti').textContent  = nf(runningT, 1); // sollte ≈ T_out sein
 
-        let crfRaw = 0;
-        if (i>0 && n>0) crfRaw = i * Math.pow(1+i,n) / (Math.pow(1+i,n) - 1);
-        else if (n>0)   crfRaw = 1/n;
-        const crfRounded = crfRaw ? Math.round(crfRaw*1000)/1000 : 0;
+  // --- 6) Stats ---
+  document.getElementById('Rtot').textContent = Rtot ? nf(Rtot) : '–';
+  document.getElementById('Uwert').textContent = U ? nf(U, 3) : '–';
+  document.getElementById('sumD').textContent = sumD ? nf(sumD, 3) + ' m' : '–';
+  document.getElementById('q').textContent = q ? nf(q, 2) + ' W/m²' : '–';
 
-        row.querySelector('.annuity-factor').value = crfRounded ? crfRounded.toFixed(3) : '';
-        const annual = amount * crfRounded;
-        row.querySelector('.annual-capital').value = annual ? annual.toFixed(2) : '';
-        if (annual) capitalTotal += annual;
-      });
-      document.getElementById(`capital-total-${pageNum}`).value = capitalTotal ? capitalTotal.toFixed(2) : '';
+  const sumDT = q * (Rsi + R_layers + Rse);
+  document.getElementById('sumDT').textContent = nf(sumDT, 3) + ' / ' + nf(dT, 3);
+  const ok = Math.abs(sumDT - dT) <= 0.01; 
+  const check = document.getElementById('check');
+  check.textContent = ok ? 'OK' : 'FEHLER';
+  check.className = 'badge ' + (ok ? 'ok' : 'bad');
 
-      // --- 2) Betrieb ---
-      const opRows = document.querySelectorAll(`#operating-table-${pageNum} tbody tr`);
-      let operatingTotal = 0;
-      opRows.forEach(row=>{
-        const a = parseNumber(row.querySelector('.expense')?.value)     || 0;
-        const b = parseNumber(row.querySelector('.maintenance')?.value) || 0;
-        const val = a + b;
-        row.querySelector('.operating-cost').value = val ? val.toFixed(2) : '';
-        if (val) operatingTotal += val;
-      });
-      document.getElementById(`operating-total-${pageNum}`).value = operatingTotal ? operatingTotal.toFixed(2) : '';
+  drawChart(Rsi, Rse);
+  save();
+}
 
-      // --- 3) Energie ---
-      const enRows = document.querySelectorAll(`#energy-table-${pageNum} tbody tr`);
-      let energyTotal = 0;
-      enRows.forEach(row=>{
-        const fee   = parseNumber(row.querySelector('.base-fee')?.value)      || 0;
-        const cons  = parseNumber(row.querySelector('.consumption')?.value)   || 0;
-        const spec  = parseNumber(row.querySelector('.specific-cost')?.value) || 0;
-        const val = fee + cons * spec;
-        row.querySelector('.energy-cost').value = val ? val.toFixed(2) : '';
-        if (val) energyTotal += val;
-      });
-      document.getElementById(`energy-total-${pageNum}`).value = energyTotal ? energyTotal.toFixed(2) : '';
+// =============================
+// Chart (Temperatur über R_sum)
+// =============================
+let chart;
+function drawChart(Rsi, Rse){
+  const dT = State.t_in - State.t_out;
+  const Rparts = [Rsi, ...State.rows.map(r => (r.lambda > 0 && r.d > 0) ? r.d / r.lambda : 0), Rse];
+  const labels = ['Innenoberfläche', ...State.rows.map((r, i) => `nach Schicht ${i + 1}`), 'Aussenoberfläche'];
+  
+  let cumR = 0; 
+  const Rvals = [0]; 
+  const Tvals = [State.t_in];
+  
+  const totalR = Rparts.reduce((a, b) => a + b, 0);
+  
+  for(const Ri of Rparts) { 
+    cumR += Ri; 
+    Rvals.push(cumR); 
+    const tempDrop = totalR > 0 ? (dT * (cumR / totalR)) : 0;
+    Tvals.push(State.t_in - tempDrop); 
+  }
 
-      // --- 4) Summary: Jahreskosten übernehmen ---
-      document.getElementById(`annual-capital-${pageNum}`).value   = capitalTotal   ? capitalTotal.toFixed(2)   : '';
-      document.getElementById(`annual-operating-${pageNum}`).value = operatingTotal ? operatingTotal.toFixed(2) : '';
-      document.getElementById(`annual-energy-${pageNum}`).value    = energyTotal    ? energyTotal.toFixed(2)    : '';
-
-      const totals = [capitalTotal, operatingTotal, energyTotal];
-
-      // Mittelwertfaktor für Betrieb & Energie
-      const iEff = (parseNumber(document.getElementById(`interest-${pageNum}`)?.value) || settings.interestRate)/100;
-      const f    = (parseNumber(document.getElementById(`inflation-${pageNum}`)?.value) || settings.inflation)/100;
-      const n    = projectDuration;
-
-      const crfForMean = (iEff>0 && n>0) ? ( iEff / (1 - Math.pow(1+iEff,-n)) ) : ( n>0 ? 1/n : 0 );
-      const r       = (1+f)/(1+iEff);
-      const midYear = Math.sqrt(1+iEff);
-
-      let meanFactorOE = 1;
-      if (n>0){
-        if (Math.abs(r-1) < 1e-9){
-          meanFactorOE = crfForMean * n;
-        } else {
-          meanFactorOE = (crfForMean / midYear) * ((1 - Math.pow(r, n)) / (1 - r));
+  const ctx = document.getElementById('chart').getContext('2d');
+  if(chart) chart.destroy();
+  
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: { 
+      labels: Rvals.map(v => Number(v.toFixed(3))), 
+      datasets: [{
+        label: 'Temperatur [°C] über kumulative R [m²K/W]', 
+        data: Tvals,
+        tension: 0.3, 
+        fill: true, 
+        pointRadius: 4, 
+        pointHoverRadius: 6,
+        borderWidth: 3,
+        borderColor: 'rgb(96, 165, 250)',
+        backgroundColor: 'rgba(96, 165, 250, 0.1)'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { 
+        legend: { display: false }, 
+        tooltip: { 
+          backgroundColor: 'rgba(15, 23, 42, 0.95)',
+          titleColor: '#e5e7eb',
+          bodyColor: '#e5e7eb',
+          borderColor: '#1f2a44',
+          borderWidth: 1,
+          callbacks: { 
+            title: (items) => 'R = ' + items[0].label + ' m²K/W', 
+            label: (item) => 'T = ' + item.formattedValue + ' °C' 
+          } 
+        } 
+      },
+      scales: {
+        x: { 
+          title: { display: true, text: 'Kumulierter Widerstand R [m²K/W]', color: '#94a3b8' },
+          ticks: { color: '#94a3b8' },
+          grid: { color: 'rgba(31, 42, 68, 0.5)' }
+        },
+        y: { 
+          title: { display: true, text: 'Temperatur [°C]', color: '#94a3b8' },
+          ticks: { color: '#94a3b8' },
+          grid: { color: 'rgba(31, 42, 68, 0.5)' }
         }
       }
-      const meanFactorRounded = Math.round(meanFactorOE * 1000) / 1000;
-
-      // Zeilen aktualisieren
-      const summaryRows = document.querySelectorAll(`#summary-table-${pageNum} tbody tr`);
-      let grandTotal = 0;
-      summaryRows.forEach((row, idx)=>{
-        const factorInput   = row.querySelector('.mean-factor');
-        const meanCostInput = row.querySelector('.mean-cost');
-
-        const factor = (idx===0) ? 1 : meanFactorRounded;  // Kapital: 1; Betrieb/Energie: gerundet
-        if (factorInput) factorInput.value = factor.toFixed(3);
-
-        const meanCost = (totals[idx] || 0) * factor;
-        if (meanCostInput) meanCostInput.value = meanCost ? meanCost.toFixed(2) : '';
-        if (meanCost) grandTotal += meanCost;
-      });
-
-      const grandEl = document.getElementById(`grand-total-${pageNum}`);
-      if (grandEl) grandEl.value = grandTotal ? grandTotal.toFixed(2) : '';
-
-      summaryRows.forEach((row, idx)=>{
-        const factor = (idx===0) ? 1 : meanFactorRounded;
-        const meanCost = (totals[idx] || 0) * factor;
-        const perc = grandTotal>0 ? (meanCost / grandTotal * 100) : 0;
-        const pEl = row.querySelector('.percentage');
-        if (pEl) pEl.value = perc ? perc.toFixed(1) : '';
-      });
-
-      // 5) Faktoren-Übersicht befüllen
-      fillFactorsTable(pageNum, meanFactorRounded);
-
-      setStatus('Berechnet');
-      updateAnalytics();
     }
+  });
+}
 
-    function fillFactorsTable(pageNum, meanFactorRounded){
-      const table = document.querySelector(`#factors-table-${pageNum} tbody`);
-      if (!table) return;
-      table.innerHTML = '';
-
-      // Annuitätsfaktoren (je Anlageteil)
-      const investRows = document.querySelectorAll(`#invest-table-${pageNum} tbody tr`);
-      investRows.forEach((row, idx)=>{
-        const name = row.querySelector('td:first-child input')?.value?.trim() || `Anlageteil ${idx+1}`;
-        const af   = row.querySelector('.annuity-factor')?.value;
-        if (af){
-          const tr = document.createElement('tr');
-          tr.innerHTML = `<td>Investition (Annuität)</td><td>${name}</td><td class="numeric">${af}</td>`;
-          table.appendChild(tr);
-        }
-      });
-
-      // Mittelwertfaktor (ein Wert für Betrieb & Energie)
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>Betrieb & Energie (Mittelwert)</td><td>Mittelwertfaktor</td><td class="numeric">${meanFactorRounded.toFixed(3)}</td>`;
-      table.appendChild(tr);
+// =============================
+// Events
+// =============================
+// Table actions
+document.addEventListener('click', (e) => {
+  const t = e.target;
+  if(t.id === 'addLayer') { 
+    State.rows.push({matId: '', name: '', d: 0.10, lambda: 0.04}); 
+    render(); 
+  }
+  else if(t.id === 'exportJson') { 
+    const blob = new Blob([JSON.stringify(State, null, 2)], {type: 'application/json'}); 
+    const a = document.createElement('a'); 
+    a.href = URL.createObjectURL(blob); 
+    a.download = 'u-wert.json'; 
+    a.click(); 
+    URL.revokeObjectURL(a.href); 
+  }
+  else if(t.id === 'exportCsv') { 
+    exportCsv(); 
+  }
+  else if(t.id === 'reset') { 
+    if(confirm('Alle Daten zurücksetzen?')) {
+      localStorage.removeItem('uvalue-pro'); 
+      location.reload(); 
     }
+  }
+  else if(t.classList.contains('del')) { 
+    const i = +t.dataset.idx; 
+    State.rows.splice(i, 1); 
+    render(); 
+  }
+  else if(t.classList.contains('up')) { 
+    const i = +t.dataset.idx; 
+    if(i > 0) { 
+      const [item] = State.rows.splice(i, 1); 
+      State.rows.splice(i - 1, 0, item); 
+      render(); 
+    } 
+  }
+  else if(t.classList.contains('down')) { 
+    const i = +t.dataset.idx; 
+    if(i < State.rows.length - 1) { 
+      const [item] = State.rows.splice(i, 1); 
+      State.rows.splice(i + 1, 0, item); 
+      render(); 
+    } 
+  }
+});
 
-    // ========= Analytics (gestapeltes Balkendiagramm) =========
-    function updateAnalytics(){
-      const pages = document.querySelectorAll('.page');
-      let sum = 0, cheapest = {name:'-', cost:Infinity};
+// Value edits
+document.addEventListener('input', (e) => {
+  const t = e.target;
+  if(t.id === 't_in') { 
+    State.t_in = parseFloat(t.value) || 0; 
+    render(); 
+  }
+  else if(t.id === 't_out') { 
+    State.t_out = parseFloat(t.value) || 0; 
+    render(); 
+  }
+  else if(t.id === 'h_in') { 
+    State.h_in = Math.max(parseFloat(t.value) || 8, 0.01); 
+    render(); 
+  }
+  else if(t.id === 'h_out') { 
+    State.h_out = Math.max(parseFloat(t.value) || 25, 0.01); 
+    render(); 
+  }
+  else if(t.classList.contains('d')) { 
+    const i = +t.dataset.idx; 
+    State.rows[i].d = Math.max(parseFloat(t.value) || 0, 0); 
+    render(); 
+  }
+  else if(t.classList.contains('lam')) { 
+    const i = +t.dataset.idx; 
+    State.rows[i].lambda = Math.max(parseFloat(t.value) || 0, 0); 
+    render(); 
+  }
+});
 
-      const labels = [];
-      const capData = [], opData = [], enData = [];
-
-      pages.forEach(p=>{
-        const pageNum = p.dataset.page;
-        const name = document.getElementById(`variant-${pageNum}`)?.value || `Variante ${pageNum}`;
-        const grand = parseNumber(document.getElementById(`grand-total-${pageNum}`)?.value) || 0;
-
-        const rows = document.querySelectorAll(`#summary-table-${pageNum} tbody tr`);
-        const capMean = parseNumber(rows[0]?.querySelector('.mean-cost')?.value) || 0;
-        const opMean  = parseNumber(rows[1]?.querySelector('.mean-cost')?.value) || 0;
-        const enMean  = parseNumber(rows[2]?.querySelector('.mean-cost')?.value) || 0;
-
-        if (grand>0){
-          sum += grand;
-          labels.push(name);
-          capData.push(capMean);
-          opData.push(opMean);
-          enData.push(enMean);
-
-          if (grand < cheapest.cost) cheapest = {name, cost:grand};
-        }
-      });
-
-      document.getElementById('totalCostAll').textContent = formatCurrency(sum);
-      document.getElementById('cheapestVariant').textContent = cheapest.cost===Infinity ? '-' : `${cheapest.name} (${formatCurrency(cheapest.cost)})`;
-
-      const ctx = document.getElementById('costChart'); if (!ctx) return;
-      if (costChart) costChart.destroy();
-
-      costChart = new Chart(ctx,{
-        type:'bar',
-        data:{
-          labels,
-          datasets:[
-            {label:'Kapital', data:capData, stack:'kosten'},
-            {label:'Betrieb', data:opData,  stack:'kosten'},
-            {label:'Energie', data:enData,  stack:'kosten'},
-          ]
-        },
-        options:{
-          responsive:true,
-          plugins:{ legend:{ position:'bottom' } },
-          scales:{
-            x:{ stacked:true },
-            y:{ stacked:true, ticks:{ callback:(v)=>formatCurrency(v) } }
-          }
-        }
-      });
+// Material selects
+document.addEventListener('change', (e) => {
+  const t = e.target;
+  if(t.classList.contains('mat')) {
+    const i = +t.dataset.idx; 
+    const id = t.value; 
+    if(!id) { 
+      State.rows[i].matId = ''; 
+      return; 
     }
-
-    // ========= Table helpers =========
-    function deleteRow(btn){
-      const tr = btn.closest('tr'); const tbody = tr.parentElement;
-      if (tbody.querySelectorAll('tr').length>1) tr.remove();
-      const pageNum = btn.closest('.page').dataset.page;
-      calculate(Number(pageNum));
+    const m = MAT_BY_ID[id];
+    if(m) {
+      State.rows[i].matId = id;
+      State.rows[i].name = m.name;
+      State.rows[i].lambda = m.lambda; // λ aus Bibliothek übernehmen
     }
+    render();
+  }
+  if(t.id === 'importJson') {
+    const f = t.files?.[0]; 
+    if(!f) return; 
+    const fr = new FileReader(); 
+    fr.onload = () => { 
+      try { 
+        const o = JSON.parse(fr.result); 
+        Object.assign(State, o); 
+        render(); 
+      } catch(err) { 
+        alert('Ungültige Datei: ' + err.message); 
+      } 
+    }; 
+    fr.readAsText(f);
+  }
+});
 
-    // ========= Print =========
-    function printAll(){ window.print(); }
+// Keyboard shortcuts
+addEventListener('keydown', (e) => {
+  if(e.key === 'Enter' && !e.shiftKey) { 
+    e.preventDefault(); 
+    document.getElementById('addLayer').click(); 
+  }
+  if(e.key === 'Delete') { 
+    if(State.rows.length) { 
+      State.rows.pop(); 
+      render(); 
+    } 
+  }
+});
 
-    // ========= Boot =========
-    function addNewPage(){
-      pageCount++;
-      document.getElementById('pages-container').insertAdjacentHTML('beforeend', createPageHTML(pageCount));
-      calculate(pageCount);
-      setStatus('Neue Seite');
-    }
-    document.addEventListener('DOMContentLoaded', ()=>{
-      document.getElementById('pages-container').innerHTML = createPageHTML(1);
-      calculate(1);
-    });
-  </script>
+// CSV Export
+function exportCsv(){
+  const header = ['Nr', 'Material', 'd [m]', 'λ [W/mK]', 'R [m²K/W]'];
+  // Reihenfolge: Rsi (Nr 1), Materialien (Nr 2..), Rse (letzte)
+  const rows = [
+    [1, 'Wärmeübergang innen', '', '', (1/Math.max(State.h_in,0.01))],
+    ...State.rows.map((r, i) => [
+      i + 2, 
+      r.name || '', 
+      (r.d || 0), 
+      (r.lambda || 0), 
+      (r.lambda > 0 && r.d > 0) ? (r.d / r.lambda) : 0
+    ]),
+    [State.rows.length + 2, 'Wärmeübergang außen', '', '', (1/Math.max(State.h_out,0.01))]
+  ];
+  const csv = [header, ...rows].map(a => a.join(';')).join('\n');
+  const a = document.createElement('a'); 
+  a.href = URL.createObjectURL(new Blob([csv], {type: 'text/csv'})); 
+  a.download = 'u-wert.csv'; 
+  a.click(); 
+  URL.revokeObjectURL(a.href);
+}
+
+// Init
+load();
+render();
+</script>
 </body>
 </html>
