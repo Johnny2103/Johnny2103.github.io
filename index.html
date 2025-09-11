@@ -1,0 +1,231 @@
+
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Auftragsrechner</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f6f8;
+            margin: 0;
+            padding: 40px;
+            color: #333;
+        }
+        h1, h2 {
+            color: #2c3e50;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 5px;
+        }
+        .form-section {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            max-width: 600px;
+            margin-bottom: 30px;
+        }
+        label {
+            display: block;
+            margin-top: 15px;
+            font-weight: 600;
+        }
+        input[type='number'], input[type='text'] {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        input[type='checkbox'] {
+            margin-right: 10px;
+        }
+        button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background-color: #2c3e50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #34495e;
+        }
+        .auftrag {
+            background-color: #fff;
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 6px;
+        }
+        .buttons button {
+            margin-right: 10px;
+            background-color: #7f8c8d;
+        }
+        .buttons button:hover {
+            background-color: #95a5a6;
+        }
+        .result {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Auftragsrechner</h1>
+
+    <div class='form-section'>
+        <label>Auftragsbezeichnung:
+            <input type='text' id='bezeichnung'>
+        </label>
+
+        <label>Anzahl gleicher Aufträge:
+            <input type='number' id='anzahl' value='1' min='1'>
+        </label>
+
+        <label>Bruttopreis (CHF):
+            <input type='number' id='brutto' step='0.01'>
+        </label>
+
+        <label>Abzug 1 (CHF):
+            <input type='number' id='abzug1' step='0.01' value='0'>
+        </label>
+
+        <label><input type='checkbox' id='abzug2check' onchange='toggleAbzug2()'> Abzug 2 aktivieren (steuerfrei)</label>
+        <input type='number' id='abzug2' step='0.01' value='0' style='display:none;'>
+
+        <label>Extra Einnahmen (CHF):
+            <input type='number' id='extraEinnahmen' step='0.01' value='0'>
+        </label>
+
+        <label>Steuersatz (%):
+            <input type='number' id='steuersatz' step='0.01' value='8.1'>
+        </label>
+
+        <button onclick='addAuftrag()'>Auftrag hinzufügen</button>
+    </div>
+
+    <h2>Berechnete Aufträge</h2>
+    <div id='auftragsliste'></div>
+
+    <h2>Totale Nettoeinnahmen nach Steuern</h2>
+    <div class='result' id='totaleNettoeinnahmen'>CHF 0.00</div>
+
+    <button onclick='exportPDF()'>Exportieren als PDF</button>
+
+    <script>
+        let auftraege = [];
+
+        function toggleAbzug2() {
+            document.getElementById('abzug2').style.display = document.getElementById('abzug2check').checked ? 'block' : 'none';
+        }
+
+        function addAuftrag() {
+            const bezeichnung = document.getElementById('bezeichnung').value || 'Unbenannter Auftrag';
+            const anzahl = parseInt(document.getElementById('anzahl').value) || 1;
+            const brutto = parseFloat(document.getElementById('brutto').value) || 0;
+            const abzug1 = parseFloat(document.getElementById('abzug1').value) || 0;
+            const abzug2aktiv = document.getElementById('abzug2check').checked;
+            const abzug2 = abzug2aktiv ? parseFloat(document.getElementById('abzug2').value) || 0 : 0;
+            const extra = parseFloat(document.getElementById('extraEinnahmen').value) || 0;
+            const steuersatz = parseFloat(document.getElementById('steuersatz').value) || 0;
+
+            const steuerpflichtigerBetrag = brutto - abzug1 + extra;
+            const steuer = steuerpflichtigerBetrag * (steuersatz / 100);
+            const nettoVorAbzug2 = steuerpflichtigerBetrag - steuer;
+            const nettoNachSteuern = nettoVorAbzug2 - abzug2;
+            const gesamt = nettoNachSteuern * anzahl;
+
+            const auftrag = {
+                bezeichnung, anzahl, brutto, abzug1, abzug2aktiv, abzug2, extra, steuersatz,
+                steuerpflichtigerBetrag, steuer, nettoVorAbzug2, nettoNachSteuern, gesamt
+            };
+
+            auftraege.push(auftrag);
+            renderAuftraege();
+            updateTotal();
+            resetForm();
+        }
+
+        function renderAuftraege() {
+            const container = document.getElementById('auftragsliste');
+            container.innerHTML = '';
+            auftraege.forEach((a, index) => {
+                container.innerHTML += `
+                    <div class='auftrag'>
+                        <strong>${a.bezeichnung} (x${a.anzahl})</strong><br>
+                        Nettoeinnahmen nach Steuern gesamt: CHF ${a.gesamt.toFixed(2)}<br>
+                        <div class='buttons'>
+                            <button onclick='editAuftrag(${index})'>Bearbeiten</button>
+                            <button onclick='deleteAuftrag(${index})'>Löschen</button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function updateTotal() {
+            const total = auftraege.reduce((sum, a) => sum + a.gesamt, 0);
+            document.getElementById('totaleNettoeinnahmen').innerText = `CHF ${total.toFixed(2)}`;
+        }
+
+        function resetForm() {
+            document.getElementById('bezeichnung').value = '';
+            document.getElementById('anzahl').value = '1';
+            document.getElementById('brutto').value = '';
+            document.getElementById('abzug1').value = '0';
+            document.getElementById('abzug2check').checked = false;
+            document.getElementById('abzug2').value = '0';
+            document.getElementById('abzug2').style.display = 'none';
+            document.getElementById('extraEinnahmen').value = '0';
+            document.getElementById('steuersatz').value = '8.1';
+        }
+
+        function deleteAuftrag(index) {
+            auftraege.splice(index, 1);
+            renderAuftraege();
+            updateTotal();
+        }
+
+        function editAuftrag(index) {
+            const a = auftraege[index];
+            document.getElementById('bezeichnung').value = a.bezeichnung;
+            document.getElementById('anzahl').value = a.anzahl;
+            document.getElementById('brutto').value = a.brutto;
+            document.getElementById('abzug1').value = a.abzug1;
+            document.getElementById('abzug2check').checked = a.abzug2aktiv;
+            document.getElementById('abzug2').style.display = a.abzug2aktiv ? 'block' : 'none';
+            document.getElementById('abzug2').value = a.abzug2;
+            document.getElementById('extraEinnahmen').value = a.extra;
+            document.getElementById('steuersatz').value = a.steuersatz;
+            deleteAuftrag(index);
+        }
+
+        function exportPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            let y = 10;
+            doc.setFontSize(12);
+            auftraege.forEach((a, i) => {
+                doc.text(`Auftrag ${i + 1}: ${a.bezeichnung} (x${a.anzahl})`, 10, y);
+                y += 6;
+                doc.text(`Brutto: CHF ${a.brutto.toFixed(2)}, Abzug 1: CHF ${a.abzug1.toFixed(2)}, Extra: CHF ${a.extra.toFixed(2)}`, 10, y);
+                y += 6;
+                doc.text(`Steuerpflichtiger Betrag: CHF ${a.steuerpflichtigerBetrag.toFixed(2)}, Steuer: CHF ${a.steuer.toFixed(2)}`, 10, y);
+                y += 6;
+                doc.text(`Netto vor Abzug 2: CHF ${a.nettoVorAbzug2.toFixed(2)}, Abzug 2 (steuerfrei): CHF ${a.abzug2.toFixed(2)}`, 10, y);
+                y += 6;
+                doc.text(`Netto nach Steuern: CHF ${a.nettoNachSteuern.toFixed(2)}, Gesamt: CHF ${a.gesamt.toFixed(2)}`, 10, y);
+                y += 10;
+                if (y > 270) { doc.addPage(); y = 10; }
+            });
+            const total = auftraege.reduce((sum, a) => sum + a.gesamt, 0);
+            doc.text(`Totale Nettoeinnahmen nach Steuern: CHF ${total.toFixed(2)}`, 10, y);
+            doc.save('auftraege.pdf');
+        }
+    </script>
+</body>
+</html>
