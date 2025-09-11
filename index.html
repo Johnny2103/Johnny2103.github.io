@@ -1,231 +1,442 @@
-
 <!DOCTYPE html>
 <html lang="de">
 <head>
-    <meta charset="UTF-8">
-    <title>Auftragsrechner</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f4f6f8;
-            margin: 0;
-            padding: 40px;
-            color: #333;
-        }
-        h1, h2 {
-            color: #2c3e50;
-            border-bottom: 1px solid #ccc;
-            padding-bottom: 5px;
-        }
-        .form-section {
-            background-color: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            max-width: 600px;
-            margin-bottom: 30px;
-        }
-        label {
-            display: block;
-            margin-top: 15px;
-            font-weight: 600;
-        }
-        input[type='number'], input[type='text'] {
-            width: 100%;
-            padding: 8px;
-            margin-top: 5px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-        input[type='checkbox'] {
-            margin-right: 10px;
-        }
-        button {
-            margin-top: 20px;
-            padding: 10px 20px;
-            background-color: #2c3e50;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #34495e;
-        }
-        .auftrag {
-            background-color: #fff;
-            border: 1px solid #ddd;
-            padding: 15px;
-            margin-bottom: 15px;
-            border-radius: 6px;
-        }
-        .buttons button {
-            margin-right: 10px;
-            background-color: #7f8c8d;
-        }
-        .buttons button:hover {
-            background-color: #95a5a6;
-        }
-        .result {
-            font-size: 1.2em;
-            font-weight: bold;
-            margin-top: 10px;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Wirtschaftlichkeits-Analyse Pro</title>
+
+  <!-- Charts -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js" crossorigin="anonymous"></script>
+
+  <style>
+    :root{--primary:#0f766e;--primary-dark:#134e4a;--text:#1f2937;--muted:#6b7280;--border:#d1d5db;--bg:#f8fafc;--bg2:#fff;--head:#f1f5f9;--total:#e2e8f0}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif}
+    .toolbar{position:sticky;top:0;z-index:10;background:var(--bg2);border-bottom:1px solid var(--border);padding:.75rem 1rem;display:flex;gap:.5rem;align-items:center;justify-content:space-between}
+    .btn{border:1px solid var(--border);background:var(--bg2);padding:.5rem .75rem;border-radius:.5rem;cursor:pointer}
+    .btn-primary{background:var(--primary);border-color:var(--primary);color:#fff}
+    .container{max-width:1200px;margin:0 auto;padding:1rem}
+    .page{background:var(--bg2);border:1px solid var(--border);border-radius:.75rem;padding:1.5rem;margin-bottom:1.5rem}
+    .page-title{margin:.25rem 0 1rem 0;color:var(--primary)}
+    .input-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;background:#f6f7fb;border:1px solid var(--border);border-radius:.5rem;padding:1rem}
+    .input-group{display:flex;flex-direction:column;gap:.25rem}
+    .input-group input{padding:.6rem;border:1px solid var(--border);border-radius:.375rem}
+    .section-title{margin:1.5rem 0 .5rem 0;border-bottom:2px solid var(--primary);padding-bottom:.25rem;color:var(--primary)}
+    .table-container{overflow:hidden;border:1px solid var(--border);border-radius:.75rem;margin-bottom:1rem}
+    table{width:100%;border-collapse:collapse;font-size:.93rem}
+    th{background:var(--head);text-align:left;padding:.7rem .6rem}
+    td{border-top:1px solid var(--border);padding:.5rem .6rem;vertical-align:middle}
+    tfoot td{background:var(--total);font-weight:700}
+    .numeric{text-align:right;font-variant-numeric:tabular-nums}
+    .table-input{width:100%;border:none;background:transparent;padding:.35rem}
+    .table-input.readonly{color:#4b5563}
+    .calculated{background:linear-gradient(90deg,transparent,rgba(15,118,110,.08))}
+    .sidebar{background:var(--bg2);border:1px solid var(--border);border-radius:.75rem;padding:1rem}
+    .grid{display:grid;grid-template-columns:1fr 340px;gap:1rem}
+    @media (max-width:1024px){.grid{grid-template-columns:1fr}}
+  </style>
 </head>
 <body>
-    <h1>Aus dieser Seite wird ein Kochbuch</h1>
-
-    <div class='form-section'>
-        <label>Auftragsbezeichnung:
-            <input type='text' id='bezeichnung'>
-        </label>
-
-        <label>Anzahl gleicher Aufträge:
-            <input type='number' id='anzahl' value='1' min='1'>
-        </label>
-
-        <label>Bruttopreis (CHF):
-            <input type='number' id='brutto' step='0.01'>
-        </label>
-
-        <label>Abzug 1 (CHF):
-            <input type='number' id='abzug1' step='0.01' value='0'>
-        </label>
-
-        <label><input type='checkbox' id='abzug2check' onchange='toggleAbzug2()'> Abzug 2 aktivieren (steuerfrei)</label>
-        <input type='number' id='abzug2' step='0.01' value='0' style='display:none;'>
-
-        <label>Extra Einnahmen (CHF):
-            <input type='number' id='extraEinnahmen' step='0.01' value='0'>
-        </label>
-
-        <label>Steuersatz (%):
-            <input type='number' id='steuersatz' step='0.01' value='8.1'>
-        </label>
-
-        <button onclick='addAuftrag()'>Auftrag hinzufügen</button>
+  <div class="toolbar">
+    <div style="display:flex;gap:.5rem;align-items:center">
+      <button class="btn" onclick="printAll()">🖨️ Drucken</button>
+      <!-- Excel-Button und -Funktion entfernt -->
+      <button class="btn btn-primary" onclick="addNewPage()">➕ Neue Seite</button>
     </div>
+    <div id="status" style="color:#64748b">Bereit</div>
+  </div>
 
-    <h2>Berechnete Aufträge</h2>
-    <div id='auftragsliste'></div>
+  <div class="container">
+    <div class="grid">
+      <div id="pages-container"></div>
 
-    <h2>Totale Nettoeinnahmen nach Steuern</h2>
-    <div class='result' id='totaleNettoeinnahmen'>CHF 0.00</div>
+      <aside class="sidebar">
+        <h3 style="margin-top:0">📊 Übersicht</h3>
+        <div>Gesamtkosten: <strong id="totalCostAll">0 CHF</strong></div>
+        <div>Günstigste Variante: <strong id="cheapestVariant">-</strong></div>
+        <div style="margin-top:1rem">
+          <canvas id="costChart" height="220"></canvas>
+          <div style="font-size:.85rem;color:#64748b;margin-top:.25rem">
+            Diagramm: gestapelte Balken (Kapital, Betrieb, Energie) je Variante
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
 
-    <button onclick='exportPDF()'>Exportieren als PDF</button>
+  <script>
+    // ========= Settings / State =========
+    let pageCount = 1;
+    const settings = { currency:'CHF', interestRate:4.0, inflation:2.0 };
+    let costChart = null;
 
-    <script>
-        let auftraege = [];
+    // ========= Helpers =========
+    function setStatus(t){ const s=document.getElementById('status'); if(!s) return; s.textContent=t; setTimeout(()=>s.textContent='Bereit',1500); }
+    function parseNumber(v){ if(typeof v!=='string') return parseFloat(v)||0; return parseFloat(v.replace(/[^\d.-]/g,'').replace(',','.'))||0; }
+    function formatCurrency(v){ return new Intl.NumberFormat('de-CH',{style:'currency',currency:settings.currency,minimumFractionDigits:2}).format(Number(v)||0); }
 
-        function toggleAbzug2() {
-            document.getElementById('abzug2').style.display = document.getElementById('abzug2check').checked ? 'block' : 'none';
+    // ========= Page =========
+    function createPageHTML(pageNum){
+      return `
+      <div class="page" data-page="${pageNum}">
+        <h2 class="page-title">Wirtschaftlichkeitsberechnung:  Variante ${pageNum}</h2>
+
+        <div class="input-grid">
+          <div class="input-group">
+            <label>Nutzungsdauer (Jahre)</label>
+            <input id="duration-${pageNum}" type="number" min="1" step="1" value="30" oninput="calculate(${pageNum})">
+          </div>
+          <div class="input-group">
+            <label>Zinssatz i (%)</label>
+            <input id="interest-${pageNum}" type="number" step="0.1" value="${settings.interestRate}" oninput="calculate(${pageNum})">
+          </div>
+          <div class="input-group">
+            <label>Preisteigerung f (%/Jahr)</label>
+            <input id="inflation-${pageNum}" type="number" step="0.1" value="${settings.inflation}" oninput="calculate(${pageNum})">
+          </div>
+          <div class="input-group">
+            <label>Variante</label>
+            <input id="variant-${pageNum}" type="text" placeholder="Bezeichnung" oninput="updateAnalytics()">
+          </div>
+        </div>
+
+        <!-- 1. Investition -->
+        <h3 class="section-title">💰 1. Investition</h3>
+        <div class="table-container">
+          <table id="invest-table-${pageNum}">
+            <thead>
+              <tr>
+                <th>Anlageteil</th>
+                <th class="numeric">Investitionsausgaben</th>
+                <th class="numeric">Nutzungsdauer</th>
+                <th class="numeric">Annuitätsfaktor</th>
+                <th class="numeric">Jährliche Kapitalkosten</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${Array(3).fill().map((_,i)=>`
+              <tr>
+                <td><input class="table-input" placeholder="z. B. Gerät ${i+1}"></td>
+                <td><input class="table-input numeric invest-amount" type="number" step="0.05" oninput="calculate(${pageNum})"></td>
+                <td><input class="table-input numeric usage-duration" type="number" step="1" oninput="calculate(${pageNum})"></td>
+                <td><input class="table-input numeric annuity-factor calculated readonly" readonly></td>
+                <td><input class="table-input numeric annual-capital calculated readonly" readonly></td>
+                <td><button class="btn" onclick="deleteRow(this)">🗑️</button></td>
+              </tr>`).join('')}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td><strong>Total</strong></td><td></td><td></td><td></td>
+                <td class="numeric"><input id="capital-total-${pageNum}" class="table-input numeric calculated readonly" readonly></td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <!-- 2. Betrieb -->
+        <h3 class="section-title">🔧 2. Jährliche Betriebskosten</h3>
+        <div class="table-container">
+          <table id="operating-table-${pageNum}">
+            <thead><tr><th>Posten</th><th class="numeric">Aufwand</th><th class="numeric">Wartung</th><th class="numeric">Jährliche Betriebskosten</th><th></th></tr></thead>
+            <tbody>
+              ${Array(2).fill().map(()=>`
+              <tr>
+                <td><input class="table-input" placeholder="z. B. Service"></td>
+                <td><input class="table-input numeric expense" type="number" step="0.05" oninput="calculate(${pageNum})"></td>
+                <td><input class="table-input numeric maintenance" type="number" step="0.05" oninput="calculate(${pageNum})"></td>
+                <td><input class="table-input numeric operating-cost calculated readonly" readonly></td>
+                <td><button class="btn" onclick="deleteRow(this)">🗑️</button></td>
+              </tr>`).join('')}
+            </tbody>
+            <tfoot><tr><td><strong>Total</strong></td><td></td><td></td><td><input id="operating-total-${pageNum}" class="table-input numeric calculated readonly" readonly></td><td></td></tr></tfoot>
+          </table>
+        </div>
+
+        <!-- 3. Energie -->
+        <h3 class="section-title">⚡ 3. Jährliche Energiekosten</h3>
+        <div class="table-container">
+          <table id="energy-table-${pageNum}">
+            <thead><tr><th>Energieträger</th><th class="numeric">Grundgebühr/Jahr</th><th class="numeric">Verbrauch</th><th class="numeric">Spezifische Kosten</th><th class="numeric">Jährliche Energiekosten</th><th></th></tr></thead>
+            <tbody>
+              ${Array(2).fill().map(()=>`
+              <tr>
+                <td><input class="table-input" placeholder="z. B. Strom"></td>
+                <td><input class="table-input numeric base-fee" type="number" step="0.05" oninput="calculate(${pageNum})"></td>
+                <td><input class="table-input numeric consumption" type="number" step="0.01" oninput="calculate(${pageNum})"></td>
+                <td><input class="table-input numeric specific-cost" type="number" step="0.0001" oninput="calculate(${pageNum})"></td>
+                <td><input class="table-input numeric energy-cost calculated readonly" readonly></td>
+                <td><button class="btn" onclick="deleteRow(this)">🗑️</button></td>
+              </tr>`).join('')}
+            </tbody>
+            <tfoot><tr><td><strong>Total</strong></td><td></td><td></td><td></td><td><input id="energy-total-${pageNum}" class="table-input numeric calculated readonly" readonly></td><td></td></tr></tfoot>
+          </table>
+        </div>
+
+        <!-- 4. Zusammenfassung -->
+        <h3 class="section-title">📊 4. Total der mittleren jährlichen Kosten</h3>
+        <div class="table-container">
+          <table id="summary-table-${pageNum}">
+            <thead><tr><th>Faktor</th><th class="numeric">Mittelwertfaktor</th><th class="numeric">Jährliche Kosten</th><th class="numeric">Mittl. jährliche Kosten</th><th class="numeric">Anteil %</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>💰 Kapitalkosten</td>
+                <td><input class="table-input numeric mean-factor calculated readonly" readonly></td>
+                <td><input id="annual-capital-${pageNum}" class="table-input numeric readonly calculated" readonly></td>
+                <td><input class="table-input numeric mean-cost calculated readonly" readonly></td>
+                <td><input class="table-input numeric percentage calculated readonly" readonly></td>
+              </tr>
+              <tr>
+                <td>🔧 Betriebskosten</td>
+                <td><input class="table-input numeric mean-factor calculated readonly" readonly></td>
+                <td><input id="annual-operating-${pageNum}" class="table-input numeric readonly calculated" readonly></td>
+                <td><input class="table-input numeric mean-cost calculated readonly" readonly></td>
+                <td><input class="table-input numeric percentage calculated readonly" readonly></td>
+              </tr>
+              <tr>
+                <td>⚡ Energiekosten</td>
+                <td><input class="table-input numeric mean-factor calculated readonly" readonly></td>
+                <td><input id="annual-energy-${pageNum}" class="table-input numeric readonly calculated" readonly></td>
+                <td><input class="table-input numeric mean-cost calculated readonly" readonly></td>
+                <td><input class="table-input numeric percentage calculated readonly" readonly></td>
+              </tr>
+            </tbody>
+            <tfoot><tr><td><strong>Gesamttotal</strong></td><td></td><td></td><td><input id="grand-total-${pageNum}" class="table-input numeric calculated readonly" readonly></td><td><strong>100%</strong></td></tr></tfoot>
+          </table>
+        </div>
+
+        <!-- 5. Faktoren-Übersicht -->
+        <h3 class="section-title">🧮 5. Faktoren-Übersicht</h3>
+        <div class="table-container">
+          <table id="factors-table-${pageNum}">
+            <thead>
+              <tr>
+                <th>Kategorie</th>
+                <th>Element</th>
+                <th class="numeric">Faktor</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- wird durch calculate() befüllt -->
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+    }
+
+    // ========= Calculation =========
+    function calculate(pageNum){
+      if (!document.getElementById(`invest-table-${pageNum}`)) return;
+
+      const interestRate   = parseNumber(document.getElementById(`interest-${pageNum}`)?.value)  || settings.interestRate;
+      const inflationRate  = parseNumber(document.getElementById(`inflation-${pageNum}`)?.value) || settings.inflation;
+      const projectDuration= parseNumber(document.getElementById(`duration-${pageNum}`)?.value)  || 20;
+
+      // --- 1) Investition (CRF auf 3 Nachkommastellen) ---
+      const investRows = document.querySelectorAll(`#invest-table-${pageNum} tbody tr`);
+      let capitalTotal = 0;
+      investRows.forEach(row=>{
+        const amount        = parseNumber(row.querySelector('.invest-amount')?.value)   || 0;
+        const usageDuration = parseNumber(row.querySelector('.usage-duration')?.value)  || projectDuration;
+        const i = interestRate/100, n = usageDuration;
+
+        let crfRaw = 0;
+        if (i>0 && n>0) crfRaw = i * Math.pow(1+i,n) / (Math.pow(1+i,n) - 1);
+        else if (n>0)   crfRaw = 1/n;
+        const crfRounded = crfRaw ? Math.round(crfRaw*1000)/1000 : 0;
+
+        row.querySelector('.annuity-factor').value = crfRounded ? crfRounded.toFixed(3) : '';
+        const annual = amount * crfRounded;
+        row.querySelector('.annual-capital').value = annual ? annual.toFixed(2) : '';
+        if (annual) capitalTotal += annual;
+      });
+      document.getElementById(`capital-total-${pageNum}`).value = capitalTotal ? capitalTotal.toFixed(2) : '';
+
+      // --- 2) Betrieb ---
+      const opRows = document.querySelectorAll(`#operating-table-${pageNum} tbody tr`);
+      let operatingTotal = 0;
+      opRows.forEach(row=>{
+        const a = parseNumber(row.querySelector('.expense')?.value)     || 0;
+        const b = parseNumber(row.querySelector('.maintenance')?.value) || 0;
+        const val = a + b;
+        row.querySelector('.operating-cost').value = val ? val.toFixed(2) : '';
+        if (val) operatingTotal += val;
+      });
+      document.getElementById(`operating-total-${pageNum}`).value = operatingTotal ? operatingTotal.toFixed(2) : '';
+
+      // --- 3) Energie ---
+      const enRows = document.querySelectorAll(`#energy-table-${pageNum} tbody tr`);
+      let energyTotal = 0;
+      enRows.forEach(row=>{
+        const fee   = parseNumber(row.querySelector('.base-fee')?.value)      || 0;
+        const cons  = parseNumber(row.querySelector('.consumption')?.value)   || 0;
+        const spec  = parseNumber(row.querySelector('.specific-cost')?.value) || 0;
+        const val = fee + cons * spec;
+        row.querySelector('.energy-cost').value = val ? val.toFixed(2) : '';
+        if (val) energyTotal += val;
+      });
+      document.getElementById(`energy-total-${pageNum}`).value = energyTotal ? energyTotal.toFixed(2) : '';
+
+      // --- 4) Summary: Jahreskosten übernehmen ---
+      document.getElementById(`annual-capital-${pageNum}`).value   = capitalTotal   ? capitalTotal.toFixed(2)   : '';
+      document.getElementById(`annual-operating-${pageNum}`).value = operatingTotal ? operatingTotal.toFixed(2) : '';
+      document.getElementById(`annual-energy-${pageNum}`).value    = energyTotal    ? energyTotal.toFixed(2)    : '';
+
+      const totals = [capitalTotal, operatingTotal, energyTotal];
+
+      // Mittelwertfaktor für Betrieb & Energie
+      const iEff = (parseNumber(document.getElementById(`interest-${pageNum}`)?.value) || settings.interestRate)/100;
+      const f    = (parseNumber(document.getElementById(`inflation-${pageNum}`)?.value) || settings.inflation)/100;
+      const n    = projectDuration;
+
+      const crfForMean = (iEff>0 && n>0) ? ( iEff / (1 - Math.pow(1+iEff,-n)) ) : ( n>0 ? 1/n : 0 );
+      const r       = (1+f)/(1+iEff);
+      const midYear = Math.sqrt(1+iEff);
+
+      let meanFactorOE = 1;
+      if (n>0){
+        if (Math.abs(r-1) < 1e-9){
+          meanFactorOE = crfForMean * n;
+        } else {
+          meanFactorOE = (crfForMean / midYear) * ((1 - Math.pow(r, n)) / (1 - r));
         }
+      }
+      const meanFactorRounded = Math.round(meanFactorOE * 1000) / 1000;
 
-        function addAuftrag() {
-            const bezeichnung = document.getElementById('bezeichnung').value || 'Unbenannter Auftrag';
-            const anzahl = parseInt(document.getElementById('anzahl').value) || 1;
-            const brutto = parseFloat(document.getElementById('brutto').value) || 0;
-            const abzug1 = parseFloat(document.getElementById('abzug1').value) || 0;
-            const abzug2aktiv = document.getElementById('abzug2check').checked;
-            const abzug2 = abzug2aktiv ? parseFloat(document.getElementById('abzug2').value) || 0 : 0;
-            const extra = parseFloat(document.getElementById('extraEinnahmen').value) || 0;
-            const steuersatz = parseFloat(document.getElementById('steuersatz').value) || 0;
+      // Zeilen aktualisieren
+      const summaryRows = document.querySelectorAll(`#summary-table-${pageNum} tbody tr`);
+      let grandTotal = 0;
+      summaryRows.forEach((row, idx)=>{
+        const factorInput   = row.querySelector('.mean-factor');
+        const meanCostInput = row.querySelector('.mean-cost');
 
-            const steuerpflichtigerBetrag = brutto - abzug1 + extra;
-            const steuer = steuerpflichtigerBetrag * (steuersatz / 100);
-            const nettoVorAbzug2 = steuerpflichtigerBetrag - steuer;
-            const nettoNachSteuern = nettoVorAbzug2 - abzug2;
-            const gesamt = nettoNachSteuern * anzahl;
+        const factor = (idx===0) ? 1 : meanFactorRounded;  // Kapital: 1; Betrieb/Energie: gerundet
+        if (factorInput) factorInput.value = factor.toFixed(3);
 
-            const auftrag = {
-                bezeichnung, anzahl, brutto, abzug1, abzug2aktiv, abzug2, extra, steuersatz,
-                steuerpflichtigerBetrag, steuer, nettoVorAbzug2, nettoNachSteuern, gesamt
-            };
+        const meanCost = (totals[idx] || 0) * factor;
+        if (meanCostInput) meanCostInput.value = meanCost ? meanCost.toFixed(2) : '';
+        if (meanCost) grandTotal += meanCost;
+      });
 
-            auftraege.push(auftrag);
-            renderAuftraege();
-            updateTotal();
-            resetForm();
+      const grandEl = document.getElementById(`grand-total-${pageNum}`);
+      if (grandEl) grandEl.value = grandTotal ? grandTotal.toFixed(2) : '';
+
+      summaryRows.forEach((row, idx)=>{
+        const factor = (idx===0) ? 1 : meanFactorRounded;
+        const meanCost = (totals[idx] || 0) * factor;
+        const perc = grandTotal>0 ? (meanCost / grandTotal * 100) : 0;
+        const pEl = row.querySelector('.percentage');
+        if (pEl) pEl.value = perc ? perc.toFixed(1) : '';
+      });
+
+      // 5) Faktoren-Übersicht befüllen
+      fillFactorsTable(pageNum, meanFactorRounded);
+
+      setStatus('Berechnet');
+      updateAnalytics();
+    }
+
+    function fillFactorsTable(pageNum, meanFactorRounded){
+      const table = document.querySelector(`#factors-table-${pageNum} tbody`);
+      if (!table) return;
+      table.innerHTML = '';
+
+      // Annuitätsfaktoren (je Anlageteil)
+      const investRows = document.querySelectorAll(`#invest-table-${pageNum} tbody tr`);
+      investRows.forEach((row, idx)=>{
+        const name = row.querySelector('td:first-child input')?.value?.trim() || `Anlageteil ${idx+1}`;
+        const af   = row.querySelector('.annuity-factor')?.value;
+        if (af){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>Investition (Annuität)</td><td>${name}</td><td class="numeric">${af}</td>`;
+          table.appendChild(tr);
         }
+      });
 
-        function renderAuftraege() {
-            const container = document.getElementById('auftragsliste');
-            container.innerHTML = '';
-            auftraege.forEach((a, index) => {
-                container.innerHTML += `
-                    <div class='auftrag'>
-                        <strong>${a.bezeichnung} (x${a.anzahl})</strong><br>
-                        Nettoeinnahmen nach Steuern gesamt: CHF ${a.gesamt.toFixed(2)}<br>
-                        <div class='buttons'>
-                            <button onclick='editAuftrag(${index})'>Bearbeiten</button>
-                            <button onclick='deleteAuftrag(${index})'>Löschen</button>
-                        </div>
-                    </div>
-                `;
-            });
-        }
+      // Mittelwertfaktor (ein Wert für Betrieb & Energie)
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>Betrieb & Energie (Mittelwert)</td><td>Mittelwertfaktor</td><td class="numeric">${meanFactorRounded.toFixed(3)}</td>`;
+      table.appendChild(tr);
+    }
 
-        function updateTotal() {
-            const total = auftraege.reduce((sum, a) => sum + a.gesamt, 0);
-            document.getElementById('totaleNettoeinnahmen').innerText = `CHF ${total.toFixed(2)}`;
-        }
+    // ========= Analytics (gestapeltes Balkendiagramm) =========
+    function updateAnalytics(){
+      const pages = document.querySelectorAll('.page');
+      let sum = 0, cheapest = {name:'-', cost:Infinity};
 
-        function resetForm() {
-            document.getElementById('bezeichnung').value = '';
-            document.getElementById('anzahl').value = '1';
-            document.getElementById('brutto').value = '';
-            document.getElementById('abzug1').value = '0';
-            document.getElementById('abzug2check').checked = false;
-            document.getElementById('abzug2').value = '0';
-            document.getElementById('abzug2').style.display = 'none';
-            document.getElementById('extraEinnahmen').value = '0';
-            document.getElementById('steuersatz').value = '8.1';
-        }
+      const labels = [];
+      const capData = [], opData = [], enData = [];
 
-        function deleteAuftrag(index) {
-            auftraege.splice(index, 1);
-            renderAuftraege();
-            updateTotal();
-        }
+      pages.forEach(p=>{
+        const pageNum = p.dataset.page;
+        const name = document.getElementById(`variant-${pageNum}`)?.value || `Variante ${pageNum}`;
+        const grand = parseNumber(document.getElementById(`grand-total-${pageNum}`)?.value) || 0;
 
-        function editAuftrag(index) {
-            const a = auftraege[index];
-            document.getElementById('bezeichnung').value = a.bezeichnung;
-            document.getElementById('anzahl').value = a.anzahl;
-            document.getElementById('brutto').value = a.brutto;
-            document.getElementById('abzug1').value = a.abzug1;
-            document.getElementById('abzug2check').checked = a.abzug2aktiv;
-            document.getElementById('abzug2').style.display = a.abzug2aktiv ? 'block' : 'none';
-            document.getElementById('abzug2').value = a.abzug2;
-            document.getElementById('extraEinnahmen').value = a.extra;
-            document.getElementById('steuersatz').value = a.steuersatz;
-            deleteAuftrag(index);
-        }
+        const rows = document.querySelectorAll(`#summary-table-${pageNum} tbody tr`);
+        const capMean = parseNumber(rows[0]?.querySelector('.mean-cost')?.value) || 0;
+        const opMean  = parseNumber(rows[1]?.querySelector('.mean-cost')?.value) || 0;
+        const enMean  = parseNumber(rows[2]?.querySelector('.mean-cost')?.value) || 0;
 
-        function exportPDF() {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
-            let y = 10;
-            doc.setFontSize(12);
-            auftraege.forEach((a, i) => {
-                doc.text(`Auftrag ${i + 1}: ${a.bezeichnung} (x${a.anzahl})`, 10, y);
-                y += 6;
-                doc.text(`Brutto: CHF ${a.brutto.toFixed(2)}, Abzug 1: CHF ${a.abzug1.toFixed(2)}, Extra: CHF ${a.extra.toFixed(2)}`, 10, y);
-                y += 6;
-                doc.text(`Steuerpflichtiger Betrag: CHF ${a.steuerpflichtigerBetrag.toFixed(2)}, Steuer: CHF ${a.steuer.toFixed(2)}`, 10, y);
-                y += 6;
-                doc.text(`Netto vor Abzug 2: CHF ${a.nettoVorAbzug2.toFixed(2)}, Abzug 2 (steuerfrei): CHF ${a.abzug2.toFixed(2)}`, 10, y);
-                y += 6;
-                doc.text(`Netto nach Steuern: CHF ${a.nettoNachSteuern.toFixed(2)}, Gesamt: CHF ${a.gesamt.toFixed(2)}`, 10, y);
-                y += 10;
-                if (y > 270) { doc.addPage(); y = 10; }
-            });
-            const total = auftraege.reduce((sum, a) => sum + a.gesamt, 0);
-            doc.text(`Totale Nettoeinnahmen nach Steuern: CHF ${total.toFixed(2)}`, 10, y);
-            doc.save('auftraege.pdf');
+        if (grand>0){
+          sum += grand;
+          labels.push(name);
+          capData.push(capMean);
+          opData.push(opMean);
+          enData.push(enMean);
+
+          if (grand < cheapest.cost) cheapest = {name, cost:grand};
         }
-    </script>
+      });
+
+      document.getElementById('totalCostAll').textContent = formatCurrency(sum);
+      document.getElementById('cheapestVariant').textContent = cheapest.cost===Infinity ? '-' : `${cheapest.name} (${formatCurrency(cheapest.cost)})`;
+
+      const ctx = document.getElementById('costChart'); if (!ctx) return;
+      if (costChart) costChart.destroy();
+
+      costChart = new Chart(ctx,{
+        type:'bar',
+        data:{
+          labels,
+          datasets:[
+            {label:'Kapital', data:capData, stack:'kosten'},
+            {label:'Betrieb', data:opData,  stack:'kosten'},
+            {label:'Energie', data:enData,  stack:'kosten'},
+          ]
+        },
+        options:{
+          responsive:true,
+          plugins:{ legend:{ position:'bottom' } },
+          scales:{
+            x:{ stacked:true },
+            y:{ stacked:true, ticks:{ callback:(v)=>formatCurrency(v) } }
+          }
+        }
+      });
+    }
+
+    // ========= Table helpers =========
+    function deleteRow(btn){
+      const tr = btn.closest('tr'); const tbody = tr.parentElement;
+      if (tbody.querySelectorAll('tr').length>1) tr.remove();
+      const pageNum = btn.closest('.page').dataset.page;
+      calculate(Number(pageNum));
+    }
+
+    // ========= Print =========
+    function printAll(){ window.print(); }
+
+    // ========= Boot =========
+    function addNewPage(){
+      pageCount++;
+      document.getElementById('pages-container').insertAdjacentHTML('beforeend', createPageHTML(pageCount));
+      calculate(pageCount);
+      setStatus('Neue Seite');
+    }
+    document.addEventListener('DOMContentLoaded', ()=>{
+      document.getElementById('pages-container').innerHTML = createPageHTML(1);
+      calculate(1);
+    });
+  </script>
 </body>
 </html>
