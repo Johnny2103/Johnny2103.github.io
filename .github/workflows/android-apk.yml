@@ -17,7 +17,8 @@ permissions:
   contents: write
 
 concurrency:
-  group: android-apk-${{ github.ref }}
+  # Pushes supersede each other; a manually started release build is never cancelled by a push.
+  group: android-apk-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 env:

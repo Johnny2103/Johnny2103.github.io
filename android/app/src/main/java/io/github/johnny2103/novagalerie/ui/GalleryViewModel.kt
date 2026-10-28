@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -132,7 +133,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         viewModelScope.launch {
-            settings.map { it.indexingEnabled to it.faceSensitivity }.collect { (enabled, _) ->
+            settings.map { it.indexingEnabled to it.faceSensitivity }.distinctUntilChanged().collect { (enabled, _) ->
                 if (!enabled) indexer.stop() else maybeStartIndexing()
             }
         }

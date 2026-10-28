@@ -48,6 +48,7 @@ import io.github.johnny2103.novagalerie.data.FaceSensitivity
 import io.github.johnny2103.novagalerie.data.GroupBy
 import io.github.johnny2103.novagalerie.data.ThemeMode
 import io.github.johnny2103.novagalerie.ui.GalleryViewModel
+import io.github.johnny2103.novagalerie.ui.AppLockState
 import io.github.johnny2103.novagalerie.ui.canUseAppLock
 import io.github.johnny2103.novagalerie.util.MediaActions
 
@@ -214,7 +215,11 @@ fun SettingsScreen(viewModel: GalleryViewModel, onBack: () -> Unit) {
                 subtitle = stringResource(if (lockAvailable) R.string.settings_app_lock_desc else R.string.settings_app_lock_unavailable),
                 checked = settings.appLock && lockAvailable,
                 enabled = lockAvailable,
-                onChange = { viewModel.setAppLock(it) },
+                onChange = {
+                    // Enabling the lock must not lock the user out of the screen they are on.
+                    if (it) AppLockState.unlocked = true
+                    viewModel.setAppLock(it)
+                },
             )
 
             Divider()
