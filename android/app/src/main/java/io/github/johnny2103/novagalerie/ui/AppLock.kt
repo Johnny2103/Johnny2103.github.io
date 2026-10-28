@@ -50,7 +50,7 @@ object AppLockState {
 fun canUseAppLock(context: Context): Boolean =
     BiometricManager.from(context).canAuthenticate(AUTHENTICATORS) == BiometricManager.BIOMETRIC_SUCCESS
 
-fun authenticate(context: Context, onSuccess: () -> Unit) {
+fun authenticate(context: Context, onSuccess: () -> Unit, onUnavailable: () -> Unit = {}) {
     val activity = context.findActivity() as? FragmentActivity ?: return
     val prompt = BiometricPrompt(
         activity,
@@ -58,6 +58,18 @@ fun authenticate(context: Context, onSuccess: () -> Unit) {
         object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                 onSuccess()
+            }
+
+            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                // Without any credential the lock cannot protect anything; do not lock the user out.
+                when (errorCode) {
+                    BiometricPrompt.ERROR_NO_DEVICE_CREDENTIAL,
+                    BiometricPrompt.ERROR_NO_BIOMETRICS,
+                    BiometricPrompt.ERROR_HW_NOT_PRESENT,
+                    BiometricPrompt.ERROR_HW_UNAVAILABLE,
+                    -> onUnavailable()
+                    else -> Unit
+                }
             }
         },
     )
@@ -72,11 +84,11 @@ fun authenticate(context: Context, onSuccess: () -> Unit) {
 /** Shows [content] only after biometric / device-credential authentication when the lock is enabled. */
 @Composable
 fun LockGate(enabled: Boolean, content: @Composable () -> Unit) {
-    if (!enabled) {
+    val context = LocalContext.current
+    if (!enabled || !canUseAppLock(context)) {
         content()
         return
     }
-    val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -96,7 +108,8 @@ fun LockGate(enabled: Boolean, content: @Composable () -> Unit) {
     if (AppLockState.unlocked) {
         content()
     } else {
-        LaunchedEffect(Unit) { authenticate(context) { AppLockState.unlocked = true } }
+        val unlock = { AppLockState.unlocked = true }
+        LaunchedEffect(Unit) { authenticate(context, onSuccess = unlock, onUnavailable = unlock) }
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column(
                 modifier = Modifier.fillMaxSize().padding(32.dp),
@@ -109,7 +122,7 @@ fun LockGate(enabled: Boolean, content: @Composable () -> Unit) {
                 Spacer(Modifier.height(8.dp))
                 Text(stringResource(R.string.lock_subtitle), color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
                 Spacer(Modifier.height(24.dp))
-                Button(onClick = { authenticate(context) { AppLockState.unlocked = true } }) { Text(stringResource(R.string.lock_unlock)) }
+                Button(onClick = { authenticate(context, onSuccess = unlock, onUnavailable = unlock) }) { Text(stringResource(R.string.lock_unlock)) }
             }
         }
     }

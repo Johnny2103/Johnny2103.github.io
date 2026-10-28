@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import androidx.exifinterface.media.ExifInterface
+import androidx.room.withTransaction
 import io.github.johnny2103.novagalerie.data.MediaItem
 import io.github.johnny2103.novagalerie.data.db.AppDatabase
 import io.github.johnny2103.novagalerie.data.db.Embeddings
@@ -56,16 +57,33 @@ class MediaIndexer(private val context: Context, private val db: AppDatabase) {
     private var job: Job? = null
 
     @Volatile private var latestItems: List<MediaItem> = emptyList()
+    @Volatile private var protectedIds: Set<Long> = emptySet()
+    @Volatile private var allowCleanup: Boolean = true
+    @Volatile private var dirty: Boolean = false
     @Volatile private var config = Config(faces = true, threshold = 0.58f)
 
     val facesDir: File = File(context.filesDir, "faces").apply { mkdirs() }
 
     fun faceFile(faceId: Long): File = File(facesDir, "$faceId.jpg")
 
-    /** (Re)starts indexing for the given library snapshot if nothing is running. */
-    fun start(scope: CoroutineScope, items: List<MediaItem>, faces: Boolean, threshold: Float) {
+    /**
+     * (Re)starts indexing for the given library snapshot if nothing is running.
+     * [keepIds] (e.g. trashed items) are never cleaned up; [cleanup] is false while the app only
+     * has partial media access, because the visible list is then not the whole library.
+     */
+    fun start(
+        scope: CoroutineScope,
+        items: List<MediaItem>,
+        faces: Boolean,
+        threshold: Float,
+        keepIds: Set<Long> = emptySet(),
+        cleanup: Boolean = true,
+    ) {
         latestItems = items
+        protectedIds = keepIds
+        allowCleanup = cleanup
         config = Config(faces, threshold)
+        dirty = true
         if (job?.isActive == true) return
         job = scope.launch(Dispatchers.Default) { runLoop() }
     }
@@ -76,23 +94,32 @@ class MediaIndexer(private val context: Context, private val db: AppDatabase) {
         job = null
     }
 
+    fun close() {
+        faceEngine?.close()
+        faceEngine = null
+    }
+
     private suspend fun runLoop() {
         try {
             while (true) {
                 coroutineContext.ensureActive()
+                dirty = false
                 val cfg = config
                 val items = latestItems.filter { !it.isExternal }
-                val currentIds = items.mapTo(HashSet()) { it.id }
-                cleanupMissing(currentIds)
+                if (allowCleanup) cleanupMissing(items.mapTo(HashSet()) { it.id } + protectedIds)
                 val indexed = db.mediaMetaDao().indexedIds(INDEX_VERSION).toHashSet()
                 val pending = items.filter { it.id !in indexed }
-                if (pending.isEmpty()) break
+                if (pending.isEmpty()) {
+                    if (dirty) continue else break
+                }
 
                 val engine = if (cfg.faces) faceEngine ?: FaceEngine(context).also { faceEngine = it } else null
                 _progress.value = IndexProgress(running = true, done = 0, total = pending.size, faceModelAvailable = engine?.available ?: true)
                 pending.forEachIndexed { i, item ->
                     coroutineContext.ensureActive()
-                    runCatching { indexOne(item, engine, cfg.threshold) }
+                    val ok = runCatching { indexOne(item, engine, cfg.threshold) }.isSuccess
+                    // A broken file must still count as indexed, otherwise the loop would retry it forever.
+                    if (!ok) runCatching { markFailed(item) }
                     _progress.update { it.copy(done = i + 1) }
                 }
             }
@@ -149,6 +176,13 @@ class MediaIndexer(private val context: Context, private val db: AppDatabase) {
                 }
                 faceCount = faces.size
                 mutex.withLock {
+                    // A previous, interrupted run may have stored faces for this item already.
+                    val stale = db.faceDao().idsForMedia(listOf(item.id))
+                    if (stale.isNotEmpty()) {
+                        stale.forEach { faceFile(it).delete() }
+                        db.faceDao().deleteByMedia(listOf(item.id))
+                        recomputePersonsLocked()
+                    }
                     for (face in faces) {
                         val faceId = db.faceDao().insert(
                             FaceEntity(
@@ -180,6 +214,21 @@ class MediaIndexer(private val context: Context, private val db: AppDatabase) {
                 longitude = lon,
                 country = country,
                 faceCount = faceCount,
+                indexedAt = System.currentTimeMillis(),
+                version = INDEX_VERSION,
+            ),
+        )
+    }
+
+    private suspend fun markFailed(item: MediaItem) {
+        db.mediaMetaDao().upsert(
+            MediaMetaEntity(
+                mediaId = item.id,
+                dateTakenMs = 0L,
+                latitude = null,
+                longitude = null,
+                country = null,
+                faceCount = 0,
                 indexedAt = System.currentTimeMillis(),
                 version = INDEX_VERSION,
             ),
@@ -237,6 +286,12 @@ class MediaIndexer(private val context: Context, private val db: AppDatabase) {
     /** Re-runs the clustering over all stored embeddings, keeping names where clusters overlap. */
     suspend fun recluster(threshold: Float) = withContext(Dispatchers.Default) {
         mutex.withLock {
+            db.withTransaction { reclusterLocked(threshold) }
+        }
+    }
+
+    private suspend fun reclusterLocked(threshold: Float) {
+        run {
             val faces = db.faceDao().all().sortedByDescending { it.quality }
             val oldPersons = db.personDao().all().associateBy { it.id }
             val oldAssignment = faces.associate { it.id to it.personId }

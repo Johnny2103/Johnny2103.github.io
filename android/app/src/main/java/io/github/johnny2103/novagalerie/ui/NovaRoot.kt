@@ -58,10 +58,14 @@ private object Routes {
 @Composable
 fun NovaRoot(viewModel: GalleryViewModel) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val settingsLoaded by viewModel.settingsLoaded.collectAsStateWithLifecycle()
     NovaTheme(themeMode = settings.themeMode, dynamicColor = settings.dynamicColor) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            LockGate(enabled = settings.appLock) {
-                NovaNavHost(viewModel)
+            // Settings arrive within a few ms; waiting avoids a frame of unlocked content when the lock is on.
+            if (settingsLoaded) {
+                LockGate(enabled = settings.appLock) {
+                    NovaNavHost(viewModel)
+                }
             }
         }
     }

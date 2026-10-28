@@ -106,11 +106,16 @@ class FaceEngine(private val context: Context) : Closeable {
         val cy = box.exactCenterY()
         val leftEye = face.getLandmark(FaceLandmark.LEFT_EYE)?.position
         val rightEye = face.getLandmark(FaceLandmark.RIGHT_EYE)?.position
-        val angle = if (leftEye != null && rightEye != null) {
+        // ML Kit names landmarks from the subject's point of view, so LEFT_EYE usually sits on the
+        // image's right; folding the angle into (-90°, 90°] makes the result convention-independent.
+        var angle = if (leftEye != null && rightEye != null) {
             Math.toDegrees(atan2((rightEye.y - leftEye.y).toDouble(), (rightEye.x - leftEye.x).toDouble())).toFloat()
         } else {
-            face.headEulerAngleZ
+            // Positive Euler Z is a counter-clockwise tilt; postRotate(-angle) below must undo it clockwise.
+            -face.headEulerAngleZ
         }
+        if (angle > 90f) angle -= 180f
+        if (angle < -90f) angle += 180f
         return runCatching {
             // Draw the rotated source into a square target centred on the face.
             val target = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)

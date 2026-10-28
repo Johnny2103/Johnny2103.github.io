@@ -56,7 +56,8 @@ object MediaActions {
     fun edit(context: Context, item: MediaItem) {
         val intent = Intent(Intent.ACTION_EDIT).apply {
             setDataAndType(item.uri, item.mimeType)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            // No write grant: MediaProvider rejects it for items this app does not own (SecurityException).
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         launch(context, Intent.createChooser(intent, context.getString(R.string.action_edit)))
     }
@@ -86,8 +87,10 @@ object MediaActions {
         if (local.isEmpty()) return@withContext DeleteResult.Done(0)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val pi = MediaStore.createDeleteRequest(resolver, local.map { it.uri })
-            return@withContext DeleteResult.NeedsConfirmation(pi.intentSender, local)
+            // One system dialog per chunk keeps the Binder transaction small; the rest is retried after OK.
+            val chunk = local.take(MAX_URIS_PER_REQUEST)
+            val pi = MediaStore.createDeleteRequest(resolver, chunk.map { it.uri })
+            return@withContext DeleteResult.NeedsConfirmation(pi.intentSender, local.drop(MAX_URIS_PER_REQUEST))
         }
 
         var deleted = 0
@@ -111,8 +114,9 @@ object MediaActions {
         val local = items.filter { !it.isExternal }
         if (local.isEmpty()) return@withContext DeleteResult.Done(0)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val pi = MediaStore.createTrashRequest(context.contentResolver, local.map { it.uri }, op == TrashOp.TRASH)
-            DeleteResult.NeedsConfirmation(pi.intentSender, local)
+            val chunk = local.take(MAX_URIS_PER_REQUEST)
+            val pi = MediaStore.createTrashRequest(context.contentResolver, chunk.map { it.uri }, op == TrashOp.TRASH)
+            DeleteResult.NeedsConfirmation(pi.intentSender, local.drop(MAX_URIS_PER_REQUEST))
         } else {
             if (op == TrashOp.TRASH) delete(context, local) else DeleteResult.Done(0)
         }
@@ -132,8 +136,12 @@ object MediaActions {
             context.startActivity(intent)
         } catch (e: ActivityNotFoundException) {
             Toast.makeText(context, R.string.no_app_toast, Toast.LENGTH_SHORT).show()
+        } catch (e: SecurityException) {
+            Toast.makeText(context, R.string.no_app_toast, Toast.LENGTH_SHORT).show()
         }
     }
+
+    private const val MAX_URIS_PER_REQUEST = 500
 }
 
 fun Context.findActivity(): Activity? {

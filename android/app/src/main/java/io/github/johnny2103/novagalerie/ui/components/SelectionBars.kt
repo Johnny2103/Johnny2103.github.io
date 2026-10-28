@@ -28,6 +28,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -109,27 +110,30 @@ fun rememberMediaRequestHandler(onDone: () -> Unit): MediaRequestHandler {
     val scope = rememberCoroutineScope()
     var confirmItems by remember { mutableStateOf<List<MediaItem>?>(null) }
     var retryItems by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
+    var pendingOp by remember { mutableStateOf<TrashOp?>(null) }
     var pendingToast by remember { mutableStateOf(R.string.deleted_toast) }
+    // The launcher callback is created before handle() exists, so it dispatches through this holder.
+    val resultHandler = remember { mutableStateOf<(DeleteResult) -> Unit>({}) }
 
     fun finished() {
         Toast.makeText(context, pendingToast, Toast.LENGTH_SHORT).show()
         onDone()
     }
 
+    suspend fun run(items: List<MediaItem>, op: TrashOp?): DeleteResult =
+        if (op == null) MediaActions.delete(context, items) else MediaActions.trash(context, items, op)
+
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        val retry = retryItems
+        val op = pendingOp
+        retryItems = emptyList()
         if (result.resultCode == Activity.RESULT_OK) {
-            val retry = retryItems
-            retryItems = emptyList()
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R && retry.isNotEmpty()) {
-                scope.launch {
-                    MediaActions.delete(context, retry)
-                    finished()
-                }
+            if (retry.isNotEmpty()) {
+                // Remaining chunk (Android 11+) or the next item needing its own consent (Android 10).
+                scope.launch { resultHandler.value(run(retry, op)) }
             } else {
                 finished()
             }
-        } else {
-            retryItems = emptyList()
         }
     }
 
@@ -142,10 +146,12 @@ fun rememberMediaRequestHandler(onDone: () -> Unit): MediaRequestHandler {
             }
         }
     }
+    SideEffect { resultHandler.value = ::handle }
 
-    fun performDelete(items: List<MediaItem>) {
-        pendingToast = R.string.deleted_toast
-        scope.launch { handle(MediaActions.delete(context, items)) }
+    fun perform(items: List<MediaItem>, op: TrashOp?, toast: Int) {
+        pendingOp = op
+        pendingToast = toast
+        scope.launch { handle(run(items, op)) }
     }
 
     confirmItems?.let { items ->
@@ -156,7 +162,7 @@ fun rememberMediaRequestHandler(onDone: () -> Unit): MediaRequestHandler {
             confirmButton = {
                 TextButton(onClick = {
                     confirmItems = null
-                    performDelete(items)
+                    perform(items, null, R.string.deleted_toast)
                 }) { Text(stringResource(R.string.action_delete)) }
             },
             dismissButton = {
@@ -168,7 +174,7 @@ fun rememberMediaRequestHandler(onDone: () -> Unit): MediaRequestHandler {
     fun requestDelete(items: List<MediaItem>) {
         if (items.isEmpty()) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            performDelete(items)
+            perform(items, null, R.string.deleted_toast)
         } else {
             confirmItems = items
         }
@@ -180,14 +186,12 @@ fun rememberMediaRequestHandler(onDone: () -> Unit): MediaRequestHandler {
             requestDelete(items)
             return
         }
-        pendingToast = R.string.trashed_toast
-        scope.launch { handle(MediaActions.trash(context, items, TrashOp.TRASH)) }
+        perform(items, TrashOp.TRASH, R.string.trashed_toast)
     }
 
     fun requestRestore(items: List<MediaItem>) {
         if (items.isEmpty()) return
-        pendingToast = R.string.restored_toast
-        scope.launch { handle(MediaActions.trash(context, items, TrashOp.RESTORE)) }
+        perform(items, TrashOp.RESTORE, R.string.restored_toast)
     }
 
     return MediaRequestHandler(

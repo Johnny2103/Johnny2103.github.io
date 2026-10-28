@@ -23,6 +23,7 @@ import io.github.johnny2103.novagalerie.data.db.TagEntity
 import io.github.johnny2103.novagalerie.data.index.CountryLookup
 import io.github.johnny2103.novagalerie.data.index.IndexProgress
 import io.github.johnny2103.novagalerie.data.index.MediaIndexer
+import io.github.johnny2103.novagalerie.ui.components.MediaPermissions
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
@@ -66,6 +67,10 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     val settings: StateFlow<AppSettings> = settingsRepository.settings
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppSettings())
+
+    /** False until DataStore has delivered the stored settings (used to avoid flashing locked content). */
+    val settingsLoaded: StateFlow<Boolean> = settingsRepository.settings.map { true }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     val favorites: StateFlow<Set<Long>> = settingsRepository.favorites
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
@@ -141,7 +146,12 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
 
     fun onPermissionResult(granted: Boolean) {
         _hasPermission.value = granted
-        if (granted) startWatching() else _media.value = emptyList()
+        if (granted) {
+            loadTrash()
+            startWatching()
+        } else {
+            _media.value = emptyList()
+        }
     }
 
     private fun startWatching() {
@@ -159,7 +169,7 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
             _loading.value = _media.value.isEmpty()
             _media.value = repository.loadAll()
             _loading.value = false
-            val ids = _media.value.mapTo(HashSet()) { it.id }
+            val ids = (_media.value + _trash.value).mapTo(HashSet()) { it.id }
             _selection.update { sel -> sel.filterTo(HashSet()) { it in ids } }
             maybeStartIndexing()
             if (_trash.value.isNotEmpty()) loadTrash()
@@ -169,11 +179,23 @@ class GalleryViewModel(app: Application) : AndroidViewModel(app) {
     private fun maybeStartIndexing() {
         val s = settings.value
         if (!_hasPermission.value || !s.indexingEnabled || _media.value.isEmpty()) return
-        indexer.start(viewModelScope, _media.value, faces = true, threshold = s.faceSensitivity.threshold)
+        indexer.start(
+            viewModelScope,
+            _media.value,
+            faces = true,
+            threshold = s.faceSensitivity.threshold,
+            keepIds = _trash.value.mapTo(HashSet()) { it.id },
+            cleanup = !MediaPermissions.isPartial(getApplication()),
+        )
     }
 
     fun loadTrash() {
         viewModelScope.launch { _trash.value = repository.loadTrashed() }
+    }
+
+    override fun onCleared() {
+        indexer.close()
+        super.onCleared()
     }
 
     // --- collections -----------------------------------------------------------------------
