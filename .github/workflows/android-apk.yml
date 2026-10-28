@@ -81,6 +81,19 @@ jobs:
           cp android/app/build/outputs/apk/release/app-release.apk "$APK_NAME"
           ls -la "$APK_NAME"
 
+      - name: Verify the APK has no network permission
+        shell: bash
+        run: |
+          # Privacy check on the final, merged APK: fail the build if any network permission slipped in.
+          AAPT2=$(ls -d "$ANDROID_HOME"/build-tools/*/aapt2 2>/dev/null | sort -V | tail -1)
+          echo "Permissions declared by $APK_NAME:"
+          "$AAPT2" dump permissions "$APK_NAME" | tee permissions.txt
+          if grep -Eq "android.permission.(INTERNET|ACCESS_NETWORK_STATE|ACCESS_WIFI_STATE)" permissions.txt; then
+            echo "::error::The APK requests a network permission – the app must stay offline."
+            exit 1
+          fi
+          echo "OK: no network permission, the app cannot open any connection."
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:

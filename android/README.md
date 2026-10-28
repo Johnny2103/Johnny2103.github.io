@@ -31,6 +31,22 @@ sich ein Release auch manuell auslösen.
 - Material 3 mit dynamischen Farben, Hell/Dunkel, Edge-to-Edge, Splash-Screen. Deutsch und Englisch.
 - Keine Netzwerkberechtigung, keine Analytics – die Erkennung läuft ausschliesslich auf dem Gerät.
 
+## Datenschutz
+
+- **Keine Netzwerkberechtigung.** Das Manifest entfernt `INTERNET`, `ACCESS_NETWORK_STATE` und
+  `ACCESS_WIFI_STATE` ausdrücklich (`tools:node="remove"`), und der Build bricht ab, wenn die fertige
+  APK eine dieser Berechtigungen enthält. Android verweigert einer App ohne `INTERNET` jede Verbindung.
+- **Alles lokal.** Gesichtserkennung (ML Kit, gebündeltes Modell) und Embeddings (TensorFlow Lite) laufen
+  auf dem Gerät. Gesichter, Personen, Orte und Tags liegen in der privaten App-Datenbank
+  (`nova.db`) und im privaten Dateiordner (`files/faces/`); andere Apps kommen nicht heran.
+  «Index neu aufbauen» oder Deinstallieren löscht alles.
+- **Keine Cloud-Sicherung.** `allowBackup="false"`: Android sichert keine App-Daten bei Google.
+- **Keine Analyse, kein Crash-Reporting, keine Konten.**
+- **Daten verlassen das Gerät nur auf deinen Befehl:** Teilen, Öffnen mit, Bearbeiten, Hintergrundbild
+  und «Auf Karte zeigen» übergeben die gewählte Datei bzw. Koordinate an die App, die du dafür auswählst.
+- Berechtigungen: Fotos/Videos lesen (ab Android 13 getrennt, ab 14 auch Teilzugriff), Standort-EXIF
+  lesen (`ACCESS_MEDIA_LOCATION`), Hintergrundbild setzen, Biometrie für die App-Sperre.
+
 ## Technik
 
 | Bereich | Umsetzung |
