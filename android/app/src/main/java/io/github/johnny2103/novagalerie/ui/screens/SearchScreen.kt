@@ -40,6 +40,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.johnny2103.novagalerie.R
+import io.github.johnny2103.novagalerie.data.GroupBy
 import io.github.johnny2103.novagalerie.data.MediaSource
 import io.github.johnny2103.novagalerie.data.TypeFilter
 import io.github.johnny2103.novagalerie.ui.GalleryViewModel
@@ -69,7 +70,7 @@ fun SearchScreen(
                     TextField(
                         value = query,
                         onValueChange = { query = it },
-                        placeholder = { Text(stringResource(R.string.search_hint)) },
+                        placeholder = { Text(stringResource(R.string.search_hint), maxLines = 1) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                         keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
@@ -128,7 +129,7 @@ fun SearchScreen(
                 contentPadding = PaddingValues(bottom = 8.dp),
                 onOpen = { index -> onOpenViewer(MediaSource.Search(query, filter), index) },
                 onToggleSelect = { },
-                groupByDate = false,
+                groupBy = GroupBy.NONE,
                 emptyText = if (query.isBlank()) stringResource(R.string.empty_timeline) else stringResource(R.string.empty_search, query),
             )
         }
