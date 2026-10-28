@@ -25,8 +25,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.johnny2103.novagalerie.R
+import io.github.johnny2103.novagalerie.data.GroupBy
 import io.github.johnny2103.novagalerie.data.MediaItem
 import io.github.johnny2103.novagalerie.util.Format
+import io.github.johnny2103.novagalerie.util.FormatDates
 import java.time.LocalDate
 
 private sealed interface GridEntry {
@@ -35,7 +37,8 @@ private sealed interface GridEntry {
 }
 
 /**
- * Photo grid grouped by day. Tapping opens the viewer, long-press starts multi-selection.
+ * Photo grid grouped by day / month / year with a fast scroller and pinch-to-zoom column count.
+ * Tapping opens the viewer, long-press starts multi-selection.
  */
 @Composable
 fun MediaGrid(
@@ -47,7 +50,8 @@ fun MediaGrid(
     onOpen: (index: Int) -> Unit,
     onToggleSelect: (id: Long) -> Unit,
     modifier: Modifier = Modifier,
-    groupByDate: Boolean = true,
+    groupBy: GroupBy = GroupBy.DAY,
+    onColumnsChange: ((delta: Int) -> Unit)? = null,
     emptyText: String = stringResource(R.string.empty_timeline),
     state: LazyGridState = rememberLazyGridState(),
 ) {
@@ -66,72 +70,102 @@ fun MediaGrid(
 
     val today = stringResource(R.string.date_today)
     val yesterday = stringResource(R.string.date_yesterday)
-    val entries = remember(items, groupByDate, today, yesterday) { buildEntries(items, groupByDate, today, yesterday) }
+    val entries = remember(items, groupBy, today, yesterday) { buildEntries(items, groupBy, today, yesterday) }
     val selectionMode = selection.isNotEmpty()
 
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(columns),
-        state = state,
-        modifier = modifier.fillMaxSize(),
-        contentPadding = contentPadding,
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        items(
-            count = entries.size,
-            key = { i ->
+    val gridModifier = if (onColumnsChange != null) modifier.fillMaxSize().pinchToChangeColumns(onColumnsChange) else modifier.fillMaxSize()
+
+    Box(modifier = gridModifier) {
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(columns),
+            state = state,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = contentPadding,
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            items(
+                count = entries.size,
+                key = { i ->
+                    when (val e = entries[i]) {
+                        is GridEntry.Header -> "h:${e.key}"
+                        is GridEntry.Item -> e.item.id
+                    }
+                },
+                span = { i -> if (entries[i] is GridEntry.Header) GridItemSpan(maxLineSpan) else GridItemSpan(1) },
+                contentType = { i -> if (entries[i] is GridEntry.Header) "header" else "item" },
+            ) { i ->
                 when (val e = entries[i]) {
-                    is GridEntry.Header -> "h:${e.key}"
-                    is GridEntry.Item -> e.item.id
-                }
-            },
-            span = { i -> if (entries[i] is GridEntry.Header) GridItemSpan(maxLineSpan) else GridItemSpan(1) },
-            contentType = { i -> if (entries[i] is GridEntry.Header) "header" else "item" },
-        ) { i ->
-            when (val e = entries[i]) {
-                is GridEntry.Header -> Text(
-                    e.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 12.dp, end = 12.dp, top = 18.dp, bottom = 6.dp),
-                )
-                is GridEntry.Item -> {
-                    val selected = e.item.id in selection
-                    MediaThumbnail(
-                        item = e.item,
-                        isFavorite = e.item.id in favorites,
-                        selectionMode = selectionMode,
-                        selected = selected,
+                    is GridEntry.Header -> Text(
+                        e.title,
+                        style = when (groupBy) {
+                            GroupBy.YEAR -> MaterialTheme.typography.headlineSmall
+                            GroupBy.MONTH -> MaterialTheme.typography.titleMedium
+                            else -> MaterialTheme.typography.titleSmall
+                        },
+                        color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier
-                            .animateItem()
-                            .combinedClickable(
-                                onClick = { if (selectionMode) onToggleSelect(e.item.id) else onOpen(e.index) },
-                                onLongClick = { onToggleSelect(e.item.id) },
-                            ),
+                            .fillMaxWidth()
+                            .padding(start = 12.dp, end = 12.dp, top = if (groupBy == GroupBy.YEAR) 24.dp else 18.dp, bottom = 6.dp),
                     )
+                    is GridEntry.Item -> {
+                        val selected = e.item.id in selection
+                        MediaThumbnail(
+                            item = e.item,
+                            isFavorite = e.item.id in favorites,
+                            selectionMode = selectionMode,
+                            selected = selected,
+                            modifier = Modifier
+                                .animateItem()
+                                .combinedClickable(
+                                    onClick = { if (selectionMode) onToggleSelect(e.item.id) else onOpen(e.index) },
+                                    onLongClick = { onToggleSelect(e.item.id) },
+                                ),
+                        )
+                    }
                 }
             }
         }
+
+        FastScroller(
+            state = state,
+            itemCount = entries.size,
+            labelFor = { index ->
+                when (val e = entries.getOrNull(index)) {
+                    is GridEntry.Header -> e.title
+                    is GridEntry.Item -> FormatDates.monthShort(e.item.dateMs)
+                    null -> null
+                }
+            },
+        )
     }
 }
 
-private fun buildEntries(items: List<MediaItem>, groupByDate: Boolean, today: String, yesterday: String): List<GridEntry> {
-    if (!groupByDate) return items.mapIndexed { i, m -> GridEntry.Item(m, i) }
+private fun buildEntries(items: List<MediaItem>, groupBy: GroupBy, today: String, yesterday: String): List<GridEntry> {
+    if (groupBy == GroupBy.NONE) return items.mapIndexed { i, m -> GridEntry.Item(m, i) }
     val now = LocalDate.now()
     val result = ArrayList<GridEntry>(items.size + 32)
-    var lastDate: LocalDate? = null
+    var lastKey: String? = null
     items.forEachIndexed { i, m ->
         val date = Format.localDate(m.dateMs)
-        if (date != lastDate) {
-            val title = when (date) {
-                now -> today
-                now.minusDays(1) -> yesterday
-                else -> Format.date(m.dateMs)
+        val key = when (groupBy) {
+            GroupBy.DAY -> date.toString()
+            GroupBy.MONTH -> "${date.year}-${date.monthValue}"
+            GroupBy.YEAR -> date.year.toString()
+            GroupBy.NONE -> ""
+        }
+        if (key != lastKey) {
+            val title = when (groupBy) {
+                GroupBy.DAY -> when (date) {
+                    now -> today
+                    now.minusDays(1) -> yesterday
+                    else -> Format.date(m.dateMs)
+                }
+                GroupBy.MONTH -> FormatDates.monthYear(m.dateMs)
+                else -> date.year.toString()
             }
-            result += GridEntry.Header(date.toString(), title)
-            lastDate = date
+            result += GridEntry.Header(key, title)
+            lastKey = key
         }
         result += GridEntry.Item(m, i)
     }

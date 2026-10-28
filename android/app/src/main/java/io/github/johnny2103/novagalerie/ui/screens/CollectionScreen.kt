@@ -5,6 +5,7 @@ package io.github.johnny2103.novagalerie.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -18,7 +19,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -26,29 +29,45 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.johnny2103.novagalerie.R
+import io.github.johnny2103.novagalerie.data.GroupBy
 import io.github.johnny2103.novagalerie.data.MediaSource
 import io.github.johnny2103.novagalerie.ui.GalleryViewModel
 import io.github.johnny2103.novagalerie.ui.components.MediaGrid
 import io.github.johnny2103.novagalerie.ui.components.SelectionTopBar
-import io.github.johnny2103.novagalerie.ui.components.rememberDeleteHandler
+import io.github.johnny2103.novagalerie.ui.components.TagDialog
+import io.github.johnny2103.novagalerie.ui.components.rememberMediaRequestHandler
 import io.github.johnny2103.novagalerie.util.MediaActions
 
+/**
+ * Generic grid screen for any [MediaSource] (album, person, country, tag, favourites, videos, trash)
+ * with multi-selection, an optional header and extra top-bar actions.
+ */
 @Composable
-fun AlbumScreen(
+fun CollectionScreen(
     viewModel: GalleryViewModel,
-    bucketId: Long,
+    source: MediaSource,
+    title: String,
     onBack: () -> Unit,
     onOpenViewer: (MediaSource, Int) -> Unit,
+    subtitle: String? = null,
+    emptyText: String = stringResource(R.string.empty_album),
+    trashMode: Boolean = false,
+    groupBy: GroupBy? = null,
+    header: (@Composable () -> Unit)? = null,
+    actions: @Composable RowScope.() -> Unit = {},
 ) {
     val context = LocalContext.current
-    val media by viewModel.media.collectAsStateWithLifecycle()
+    val itemsFlow = remember(source) { viewModel.observeItems(source) }
+    val items by itemsFlow.collectAsStateWithLifecycle(initialValue = emptyList())
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
     val selection by viewModel.selection.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
-    val items = remember(media, bucketId) { media.filter { it.bucketId == bucketId } }
-    val title = items.firstOrNull()?.bucketName ?: ""
+    var showTagDialog by remember { mutableStateOf(false) }
 
-    val deleteItems = rememberDeleteHandler { viewModel.clearSelection() }
+    val requests = rememberMediaRequestHandler {
+        viewModel.clearSelection()
+        if (trashMode) viewModel.loadTrash()
+    }
     BackHandler(enabled = selection.isNotEmpty()) { viewModel.clearSelection() }
 
     Scaffold(
@@ -65,7 +84,12 @@ fun AlbumScreen(
                         val all = selected.all { it.id in favorites }
                         viewModel.setFavorites(selected.map { it.id }, !all)
                     },
-                    onDelete = { deleteItems(selected) },
+                    onDelete = {
+                        if (trashMode || !settings.useTrash) requests.delete(selected) else requests.trash(selected)
+                    },
+                    onTags = { showTagDialog = true },
+                    trashMode = trashMode,
+                    onRestore = { requests.restore(selected) },
                 )
             } else {
                 TopAppBar(
@@ -73,7 +97,7 @@ fun AlbumScreen(
                         Column {
                             Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(
-                                stringResource(R.string.items_count, items.size),
+                                subtitle ?: stringResource(R.string.items_count, items.size),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -82,20 +106,33 @@ fun AlbumScreen(
                     navigationIcon = {
                         IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back)) }
                     },
+                    actions = actions,
                 )
             }
         },
     ) { padding ->
-        MediaGrid(
-            items = items,
-            favorites = favorites,
-            selection = selection,
-            columns = settings.gridColumns,
-            contentPadding = PaddingValues(bottom = 8.dp),
-            onOpen = { index -> onOpenViewer(MediaSource.AlbumSource(bucketId), index) },
-            onToggleSelect = viewModel::toggleSelected,
-            modifier = Modifier.fillMaxSize().padding(padding),
-            emptyText = stringResource(R.string.empty_album),
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            header?.invoke()
+            MediaGrid(
+                items = items,
+                favorites = favorites,
+                selection = selection,
+                columns = settings.gridColumns,
+                contentPadding = PaddingValues(bottom = 8.dp),
+                onOpen = { index -> onOpenViewer(source, index) },
+                onToggleSelect = viewModel::toggleSelected,
+                groupBy = groupBy ?: settings.groupBy,
+                onColumnsChange = { delta -> viewModel.setGridColumns(settings.gridColumns + delta) },
+                emptyText = emptyText,
+            )
+        }
+    }
+
+    if (showTagDialog) {
+        TagDialog(
+            viewModel = viewModel,
+            mediaIds = selection.toList(),
+            onDismiss = { showTagDialog = false },
         )
     }
 }

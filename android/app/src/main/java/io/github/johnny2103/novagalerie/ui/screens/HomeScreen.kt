@@ -3,6 +3,8 @@
 package io.github.johnny2103.novagalerie.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,7 +28,9 @@ import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.PhotoAlbum
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.outlined.Collections
+import androidx.compose.material.icons.outlined.Face
 import androidx.compose.material.icons.outlined.Photo
 import androidx.compose.material.icons.outlined.PhotoAlbum
 import androidx.compose.material3.Card
@@ -46,13 +50,20 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -63,25 +74,35 @@ import io.github.johnny2103.novagalerie.data.MediaSource
 import io.github.johnny2103.novagalerie.ui.GalleryViewModel
 import io.github.johnny2103.novagalerie.ui.components.MediaGrid
 import io.github.johnny2103.novagalerie.ui.components.SelectionTopBar
-import io.github.johnny2103.novagalerie.ui.components.rememberDeleteHandler
+import io.github.johnny2103.novagalerie.ui.components.TagDialog
+import io.github.johnny2103.novagalerie.ui.components.rememberMediaRequestHandler
 import io.github.johnny2103.novagalerie.util.MediaActions
-import androidx.compose.ui.platform.LocalContext
 
 private enum class HomeTab(val labelRes: Int) {
     TIMELINE(R.string.nav_timeline),
     ALBUMS(R.string.nav_albums),
-    FAVORITES(R.string.nav_favorites),
+    PEOPLE(R.string.nav_people),
+    EXPLORE(R.string.nav_explore),
 }
+
+/** Navigation callbacks the home tabs can trigger. */
+class HomeNavigation(
+    val openViewer: (MediaSource, Int) -> Unit,
+    val openAlbum: (Long) -> Unit,
+    val openPerson: (Long) -> Unit,
+    val openCountry: (String) -> Unit,
+    val openTag: (Long) -> Unit,
+    val openCollection: (String) -> Unit,
+    val openSearch: () -> Unit,
+    val openSettings: () -> Unit,
+)
 
 @Composable
 fun HomeScreen(
     viewModel: GalleryViewModel,
     partialAccess: Boolean,
     onRequestAccess: () -> Unit,
-    onOpenViewer: (MediaSource, Int) -> Unit,
-    onOpenAlbum: (Long) -> Unit,
-    onOpenSearch: () -> Unit,
-    onOpenSettings: () -> Unit,
+    nav: HomeNavigation,
 ) {
     val context = LocalContext.current
     var tabIndex by rememberSaveable { mutableIntStateOf(0) }
@@ -89,22 +110,20 @@ fun HomeScreen(
 
     val timeline by viewModel.timeline.collectAsStateWithLifecycle()
     val albums by viewModel.albums.collectAsStateWithLifecycle()
-    val favoriteItems by viewModel.favoriteItems.collectAsStateWithLifecycle()
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
     val selection by viewModel.selection.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val loading by viewModel.loading.collectAsStateWithLifecycle()
+    val progress by viewModel.indexProgress.collectAsStateWithLifecycle()
+    var showTagDialog by remember { mutableStateOf(false) }
 
-    val deleteItems = rememberDeleteHandler { viewModel.clearSelection() }
+    val requests = rememberMediaRequestHandler { viewModel.clearSelection() }
     BackHandler(enabled = selection.isNotEmpty()) { viewModel.clearSelection() }
 
-    val visibleItems = when (tab) {
-        HomeTab.TIMELINE -> timeline
-        HomeTab.FAVORITES -> favoriteItems
-        HomeTab.ALBUMS -> emptyList()
-    }
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             if (selection.isNotEmpty()) {
                 val selected = viewModel.selectedItems()
@@ -112,22 +131,29 @@ fun HomeScreen(
                     count = selection.size,
                     allFavorite = selected.isNotEmpty() && selected.all { it.id in favorites },
                     onClose = viewModel::clearSelection,
-                    onSelectAll = { viewModel.selectAll(visibleItems) },
+                    onSelectAll = { viewModel.selectAll(timeline) },
                     onShare = { MediaActions.share(context, selected) },
                     onToggleFavorite = {
                         val all = selected.all { it.id in favorites }
                         viewModel.setFavorites(selected.map { it.id }, !all)
                     },
-                    onDelete = { deleteItems(selected) },
+                    onDelete = { if (settings.useTrash) requests.trash(selected) else requests.delete(selected) },
+                    onTags = { showTagDialog = true },
                 )
             } else {
                 TopAppBar(
-                    title = { Text(if (tab == HomeTab.TIMELINE) stringResource(R.string.app_name) else stringResource(tab.labelRes)) },
+                    title = {
+                        Text(
+                            if (tab == HomeTab.TIMELINE) stringResource(R.string.app_name) else stringResource(tab.labelRes),
+                            fontWeight = FontWeight.Bold,
+                        )
+                    },
                     actions = {
-                        IconButton(onClick = onOpenSearch) { Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.action_search)) }
-                        IconButton(onClick = onOpenSettings) { Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.action_settings)) }
+                        IconButton(onClick = nav.openSearch) { Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.action_search)) }
+                        IconButton(onClick = nav.openSettings) { Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.action_settings)) }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
+                    scrollBehavior = scrollBehavior,
                 )
             }
         },
@@ -146,7 +172,8 @@ fun HomeScreen(
                                 when (t) {
                                     HomeTab.TIMELINE -> if (selectedTab) Icons.Filled.Photo else Icons.Outlined.Photo
                                     HomeTab.ALBUMS -> if (selectedTab) Icons.Filled.PhotoAlbum else Icons.Outlined.PhotoAlbum
-                                    HomeTab.FAVORITES -> if (selectedTab) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder
+                                    HomeTab.PEOPLE -> Icons.Outlined.Face
+                                    HomeTab.EXPLORE -> Icons.Outlined.Collections
                                 },
                                 contentDescription = null,
                             )
@@ -160,6 +187,9 @@ fun HomeScreen(
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             if (loading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             if (partialAccess) PartialAccessBanner(onRequestAccess)
+            AnimatedVisibility(visible = progress.running && progress.total > 0 && tab != HomeTab.PEOPLE) {
+                IndexProgressBar(done = progress.done, total = progress.total)
+            }
             when (tab) {
                 HomeTab.TIMELINE -> MediaGrid(
                     items = timeline,
@@ -167,22 +197,36 @@ fun HomeScreen(
                     selection = selection,
                     columns = settings.gridColumns,
                     contentPadding = PaddingValues(bottom = 8.dp),
-                    onOpen = { index -> onOpenViewer(MediaSource.All, index) },
+                    onOpen = { index -> nav.openViewer(MediaSource.All, index) },
                     onToggleSelect = viewModel::toggleSelected,
+                    groupBy = settings.groupBy,
+                    onColumnsChange = { delta -> viewModel.setGridColumns(settings.gridColumns + delta) },
                 )
-                HomeTab.FAVORITES -> MediaGrid(
-                    items = favoriteItems,
-                    favorites = favorites,
-                    selection = selection,
-                    columns = settings.gridColumns,
-                    contentPadding = PaddingValues(bottom = 8.dp),
-                    onOpen = { index -> onOpenViewer(MediaSource.Favorites, index) },
-                    onToggleSelect = viewModel::toggleSelected,
-                    emptyText = stringResource(R.string.empty_favorites),
-                )
-                HomeTab.ALBUMS -> AlbumsGrid(albums = albums, onOpenAlbum = onOpenAlbum)
+                HomeTab.ALBUMS -> AlbumsGrid(albums = albums, onOpenAlbum = nav.openAlbum)
+                HomeTab.PEOPLE -> PeopleTab(viewModel = viewModel, onOpenPerson = nav.openPerson)
+                HomeTab.EXPLORE -> ExploreTab(viewModel = viewModel, nav = nav)
             }
         }
+    }
+
+    if (showTagDialog) {
+        TagDialog(viewModel = viewModel, mediaIds = selection.toList(), onDismiss = { showTagDialog = false })
+    }
+}
+
+@Composable
+fun IndexProgressBar(done: Int, total: Int) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+        Text(
+            stringResource(R.string.index_progress, done, total),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(4.dp))
+        LinearProgressIndicator(
+            progress = { if (total == 0) 0f else done.toFloat() / total },
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
@@ -222,29 +266,50 @@ private fun AlbumsGrid(albums: List<Album>, onOpenAlbum: (Long) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         items(albums, key = { it.id }) { album ->
-            Column(
+            Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(RoundedCornerShape(18.dp))
                     .clickable { onOpenAlbum(album.id) },
             ) {
                 AsyncImage(
                     model = album.cover.uri,
                     contentDescription = album.name,
                     contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(1f)
-                        .clip(RoundedCornerShape(16.dp)),
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                0f to Color.Transparent,
+                                0.55f to Color.Transparent,
+                                1f to Color.Black.copy(alpha = 0.75f),
+                            ),
+                        ),
                 )
-                Spacer(Modifier.height(6.dp))
-                Text(album.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 4.dp))
-                Text(
-                    stringResource(R.string.items_count, album.count),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                )
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(12.dp),
+                ) {
+                    Text(album.name, style = MaterialTheme.typography.titleMedium, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(stringResource(R.string.items_count, album.count), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.85f))
+                }
+                if (album.cover.isVideo) {
+                    Icon(
+                        Icons.Filled.VideoLibrary,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.align(Alignment.TopEnd).padding(10.dp),
+                    )
+                }
             }
         }
     }
 }
+
+@Suppress("unused")
+private val favoriteIcon = Icons.Filled.Favorite

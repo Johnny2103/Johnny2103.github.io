@@ -16,11 +16,13 @@ import io.github.johnny2103.novagalerie.data.MediaItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/** Result of a delete attempt: either done, or the system needs the user to confirm first. */
+/** Result of a delete/trash/restore attempt: either done, or the system needs the user to confirm first. */
 sealed interface DeleteResult {
     data class Done(val deleted: Int) : DeleteResult
     data class NeedsConfirmation(val intentSender: IntentSender, val pending: List<MediaItem>) : DeleteResult
 }
+
+enum class TrashOp { TRASH, RESTORE }
 
 object MediaActions {
 
@@ -103,6 +105,20 @@ object MediaActions {
         }
         DeleteResult.Done(deleted)
     }
+
+    /** Moves items to or restores them from the system trash (Android 11+). */
+    suspend fun trash(context: Context, items: List<MediaItem>, op: TrashOp): DeleteResult = withContext(Dispatchers.IO) {
+        val local = items.filter { !it.isExternal }
+        if (local.isEmpty()) return@withContext DeleteResult.Done(0)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val pi = MediaStore.createTrashRequest(context.contentResolver, local.map { it.uri }, op == TrashOp.TRASH)
+            DeleteResult.NeedsConfirmation(pi.intentSender, local)
+        } else {
+            if (op == TrashOp.TRASH) delete(context, local) else DeleteResult.Done(0)
+        }
+    }
+
+    fun isTrashSupported(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
 
     private fun commonMimeType(items: List<MediaItem>): String {
         val types = items.map { it.mimeType }.toSet()

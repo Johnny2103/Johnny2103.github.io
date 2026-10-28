@@ -11,8 +11,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Label
+import androidx.compose.material.icons.filled.RestoreFromTrash
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
@@ -36,6 +39,7 @@ import io.github.johnny2103.novagalerie.R
 import io.github.johnny2103.novagalerie.data.MediaItem
 import io.github.johnny2103.novagalerie.util.DeleteResult
 import io.github.johnny2103.novagalerie.util.MediaActions
+import io.github.johnny2103.novagalerie.util.TrashOp
 import kotlinx.coroutines.launch
 
 /** Top bar shown while items are selected in a grid. */
@@ -48,6 +52,9 @@ fun SelectionTopBar(
     onShare: () -> Unit,
     onToggleFavorite: () -> Unit,
     onDelete: () -> Unit,
+    onTags: (() -> Unit)? = null,
+    trashMode: Boolean = false,
+    onRestore: (() -> Unit)? = null,
 ) {
     TopAppBar(
         title = { Text(stringResource(R.string.selected_count, count)) },
@@ -56,14 +63,24 @@ fun SelectionTopBar(
         },
         actions = {
             IconButton(onClick = onSelectAll) { Icon(Icons.Filled.SelectAll, contentDescription = stringResource(R.string.action_select_all)) }
-            IconButton(onClick = onToggleFavorite) {
-                Icon(
-                    if (allFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                    contentDescription = stringResource(if (allFavorite) R.string.action_unfavorite else R.string.action_favorite),
-                )
+            if (trashMode) {
+                if (onRestore != null) {
+                    IconButton(onClick = onRestore) { Icon(Icons.Filled.RestoreFromTrash, contentDescription = stringResource(R.string.action_restore)) }
+                }
+                IconButton(onClick = onDelete) { Icon(Icons.Filled.DeleteForever, contentDescription = stringResource(R.string.action_delete_forever)) }
+            } else {
+                IconButton(onClick = onToggleFavorite) {
+                    Icon(
+                        if (allFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                        contentDescription = stringResource(if (allFavorite) R.string.action_unfavorite else R.string.action_favorite),
+                    )
+                }
+                if (onTags != null) {
+                    IconButton(onClick = onTags) { Icon(Icons.Filled.Label, contentDescription = stringResource(R.string.action_tags)) }
+                }
+                IconButton(onClick = onShare) { Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.action_share)) }
+                IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.action_delete)) }
             }
-            IconButton(onClick = onShare) { Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.action_share)) }
-            IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.action_delete)) }
         },
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -74,20 +91,29 @@ fun SelectionTopBar(
     )
 }
 
+/** Delete / trash / restore operations that route through the system confirmation when needed. */
+class MediaRequestHandler internal constructor(
+    val delete: (List<MediaItem>) -> Unit,
+    val trash: (List<MediaItem>) -> Unit,
+    val restore: (List<MediaItem>) -> Unit,
+)
+
 /**
- * Returns a function that deletes media items, going through the system confirmation
- * (Android 11+ / scoped storage) when required. [onDeleted] runs after a successful delete.
+ * Returns a handler for deleting, trashing and restoring media. Android 11+ shows its own
+ * confirmation; on Android 10 a RecoverableSecurityException may ask for the same; older
+ * versions get our own dialog. [onDone] runs after a successful operation.
  */
 @Composable
-fun rememberDeleteHandler(onDeleted: () -> Unit): (List<MediaItem>) -> Unit {
+fun rememberMediaRequestHandler(onDone: () -> Unit): MediaRequestHandler {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var confirmItems by remember { mutableStateOf<List<MediaItem>?>(null) }
     var retryItems by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
+    var pendingToast by remember { mutableStateOf(R.string.deleted_toast) }
 
     fun finished() {
-        Toast.makeText(context, R.string.deleted_toast, Toast.LENGTH_SHORT).show()
-        onDeleted()
+        Toast.makeText(context, pendingToast, Toast.LENGTH_SHORT).show()
+        onDone()
     }
 
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
@@ -107,16 +133,19 @@ fun rememberDeleteHandler(onDeleted: () -> Unit): (List<MediaItem>) -> Unit {
         }
     }
 
-    fun perform(items: List<MediaItem>) {
-        scope.launch {
-            when (val result = MediaActions.delete(context, items)) {
-                is DeleteResult.Done -> if (result.deleted > 0) finished()
-                is DeleteResult.NeedsConfirmation -> {
-                    retryItems = result.pending
-                    launcher.launch(IntentSenderRequest.Builder(result.intentSender).build())
-                }
+    fun handle(result: DeleteResult) {
+        when (result) {
+            is DeleteResult.Done -> if (result.deleted > 0) finished()
+            is DeleteResult.NeedsConfirmation -> {
+                retryItems = result.pending
+                launcher.launch(IntentSenderRequest.Builder(result.intentSender).build())
             }
         }
+    }
+
+    fun performDelete(items: List<MediaItem>) {
+        pendingToast = R.string.deleted_toast
+        scope.launch { handle(MediaActions.delete(context, items)) }
     }
 
     confirmItems?.let { items ->
@@ -127,7 +156,7 @@ fun rememberDeleteHandler(onDeleted: () -> Unit): (List<MediaItem>) -> Unit {
             confirmButton = {
                 TextButton(onClick = {
                     confirmItems = null
-                    perform(items)
+                    performDelete(items)
                 }) { Text(stringResource(R.string.action_delete)) }
             },
             dismissButton = {
@@ -136,15 +165,34 @@ fun rememberDeleteHandler(onDeleted: () -> Unit): (List<MediaItem>) -> Unit {
         )
     }
 
-    fun request(items: List<MediaItem>) {
+    fun requestDelete(items: List<MediaItem>) {
         if (items.isEmpty()) return
-        // Android 11+ shows its own confirmation dialog; older versions get ours.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            perform(items)
+            performDelete(items)
         } else {
             confirmItems = items
         }
     }
 
-    return { items -> request(items) }
+    fun requestTrash(items: List<MediaItem>) {
+        if (items.isEmpty()) return
+        if (!MediaActions.isTrashSupported()) {
+            requestDelete(items)
+            return
+        }
+        pendingToast = R.string.trashed_toast
+        scope.launch { handle(MediaActions.trash(context, items, TrashOp.TRASH)) }
+    }
+
+    fun requestRestore(items: List<MediaItem>) {
+        if (items.isEmpty()) return
+        pendingToast = R.string.restored_toast
+        scope.launch { handle(MediaActions.trash(context, items, TrashOp.RESTORE)) }
+    }
+
+    return MediaRequestHandler(
+        delete = { requestDelete(it) },
+        trash = { requestTrash(it) },
+        restore = { requestRestore(it) },
+    )
 }

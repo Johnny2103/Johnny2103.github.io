@@ -15,29 +15,39 @@ sich ein Release auch manuell auslösen.
 
 ## Funktionen
 
-- Zeitleiste aller Fotos und Videos, nach Tagen gruppiert, Rasterbreite einstellbar
-- Alben (MediaStore-Ordner) mit Cover und Anzahl
-- Favoriten (lokal gespeichert, DataStore)
-- Suche nach Name, Album oder Typ mit Foto/Video-Filter
-- Vollbild-Viewer: Wischen, Pinch-Zoom, Doppeltipp-Zoom, Video-Wiedergabe (Media3/ExoPlayer)
-- Details: EXIF (Kamera, Objektiv, Belichtung, GPS mit Kartenlink), Auflösung, Grösse, Pfad
-- Mehrfachauswahl: Teilen, Favorit, Löschen (über den System-Dialog, scoped storage)
-- Als Hintergrund festlegen, Öffnen mit, Bearbeiten in anderer App
-- Empfängt Bilder/Videos von anderen Apps (VIEW/SEND)
-- Material 3 mit dynamischen Farben, Hell/Dunkel, Edge-to-Edge, Splash-Screen
-- Keine Netzwerkberechtigung, keine Analytics
+- **Personen**: Gesichtserkennung komplett offline (ML Kit Face Detection + MobileFaceNet-Embeddings via
+  TensorFlow Lite). Gesichter werden automatisch zu Personen gruppiert; Personen benennen, zusammenführen,
+  ausblenden, Titelbild wählen, nach Namen suchen.
+- **Orte**: Offline-Länderzuordnung aus den EXIF-/Video-GPS-Daten (Natural-Earth-Polygone), Kartenlink.
+- **Zeitleiste** nach Tag, Monat oder Jahr gruppiert, Schnellscroll-Leiste mit Datumsblase,
+  Spaltenzahl per Pinch-Geste.
+- **Alben**, **Favoriten**, **Videos**, **Tags** (lokal), **Statistik** (Jahre, Alben, Länder, Personen).
+- **Papierkorb** (Android 11+): Löschen verschiebt in den System-Papierkorb, Wiederherstellen möglich.
+- **Viewer**: Wischen, Pinch-/Doppeltipp-Zoom, Video-Wiedergabe (Media3/ExoPlayer), Diashow,
+  Details mit EXIF (Kamera, Objektiv, Belichtung, GPS), erkannte Personen, Land und Tags.
+- Mehrfachauswahl: Teilen, Favorit, Tags, Papierkorb/Löschen; Hintergrundbild, Öffnen mit, Bearbeiten.
+- Empfängt Bilder/Videos von anderen Apps (VIEW/SEND).
+- **App-Sperre** mit Biometrie oder Gerätesperre.
+- Material 3 mit dynamischen Farben, Hell/Dunkel, Edge-to-Edge, Splash-Screen. Deutsch und Englisch.
+- Keine Netzwerkberechtigung, keine Analytics – die Erkennung läuft ausschliesslich auf dem Gerät.
 
 ## Technik
 
 | Bereich | Umsetzung |
 | --- | --- |
 | Sprache / UI | Kotlin 2.0, Jetpack Compose (BOM 2024.12), Material 3 |
-| Medien | MediaStore (eine Query über die `files`-Tabelle), ContentObserver → Flow |
+| Medien | MediaStore (eine Query über die `files`-Tabelle), ContentObserver → Flow, Papierkorb-API |
 | Bilder | Coil 3 (Video-Frames, GIF, SVG) |
 | Video | Media3 ExoPlayer + PlayerView |
+| Gesichter | ML Kit Face Detection (gebündelt, offline) + MobileFaceNet TFLite (112×112 → 192-dim), Online-Clustering per Kosinus-Ähnlichkeit |
+| Orte | Natural Earth 1:50m TopoJSON (`assets/geo`), Point-in-Polygon |
 | Metadaten | AndroidX ExifInterface, MediaMetadataRetriever |
-| Persistenz | Preferences DataStore |
+| Persistenz | Room (Analyse, Gesichter, Personen, Tags), Preferences DataStore (Einstellungen, Favoriten) |
+| Sicherheit | AndroidX Biometric |
 | Min / Target SDK | 26 / 35 |
+
+Das Modell `app/src/main/assets/models/mobilefacenet.tflite` stammt aus dem BSD-3-lizenzierten Projekt
+*FaceRecognitionAuth* (Marcos Carlomagno); Lizenztext liegt daneben.
 
 ## Lokal bauen
 

@@ -3,15 +3,15 @@ package io.github.johnny2103.novagalerie
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.fragment.app.FragmentActivity
 import io.github.johnny2103.novagalerie.ui.GalleryViewModel
 import io.github.johnny2103.novagalerie.ui.NovaRoot
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     private val viewModel: GalleryViewModel by viewModels()
 

@@ -91,11 +91,18 @@ bleibt bei wenigen MB, startet schneller und sieht auf Android 12+ aus wie eine 
 | Glide (Thumbnails) + eigene Decoder | Coil 3 mit Video-, GIF- und SVG-Decodern |
 | media_kit / eigener Playback-Service | Media3 ExoPlayer |
 | metadata-extractor, XMP, Fork von ExifInterface | AndroidX ExifInterface + MediaMetadataRetriever |
-| Room-Katalog, WorkManager-Analyse | Direkt aus dem MediaStore, live per ContentObserver |
+| Room-Katalog, WorkManager-Analyse | Room-Katalog, Analyse im Vordergrund mit Fortschrittsanzeige |
+| Länder über Natural-Earth-Polygone | Gleiche Datenbasis, gleiche Idee (Offline-Point-in-Polygon) |
+| Keine Personen-Erkennung | **Gesichtserkennung offline** (ML Kit + MobileFaceNet), Personen gruppieren, benennen, zusammenführen, suchen |
+| Tags per XMP in der Datei | Lokale Tags in der Datenbank (Datei bleibt unverändert) |
 | Firebase Crashlytics, Play Services, Internet | Keine Netzwerkberechtigung |
+| Biometrie für versteckte Elemente | App-Sperre mit Biometrie / Gerätesperre |
 | minSdk 32 | minSdk 26 |
 
-Bewusst (noch) nicht übernommen: Tags/XMP-Schreiben, Länder- und Kartenansicht, Motion Photos,
+Zusätzlich gegenüber Aves: Papierkorb mit Wiederherstellen (Android 11+), Schnellscroll-Leiste mit Datum,
+Pinch-Geste für die Rasterbreite, Diashow, Statistikseite.
+
+Bewusst (noch) nicht übernommen: XMP-Schreiben, Kartenansicht mit Kacheln, Motion Photos, Panoramen,
 Bildschirmschoner, Widgets, TV-Oberfläche. Diese Funktionen lassen sich bei Bedarf gezielt ergänzen.
 
 Quellcode: [`android/`](../android/), Build/Release: [`.github/workflows/android-apk.yml`](../.github/workflows/android-apk.yml).

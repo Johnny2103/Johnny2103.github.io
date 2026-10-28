@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
 }
 
 // Version is injected by CI (-PappVersionName=... -PappVersionCode=...), with local defaults.
@@ -21,6 +22,10 @@ android {
         versionCode = appVersionCode
         versionName = appVersionName
         vectorDrawables.useSupportLibrary = true
+        ndk {
+            // Phones and tablets only; keeps the universal APK small.
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
     }
 
     signingConfigs {
@@ -58,6 +63,11 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    androidResources {
+        // The TFLite model must stay uncompressed so it can be memory-mapped.
+        noCompress += "tflite"
     }
 
     packaging {
@@ -106,4 +116,12 @@ dependencies {
     implementation(libs.coil.svg)
 
     implementation(libs.kotlinx.coroutines.android)
+
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
+
+    implementation(libs.androidx.biometric)
+    implementation(libs.mlkit.face.detection)
+    implementation(libs.tensorflow.lite)
 }

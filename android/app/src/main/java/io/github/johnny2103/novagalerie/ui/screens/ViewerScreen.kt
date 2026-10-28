@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 
 package io.github.johnny2103.novagalerie.ui.screens
 
@@ -11,6 +11,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -27,12 +29,15 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.RestoreFromTrash
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -57,7 +62,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -70,24 +77,34 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.johnny2103.novagalerie.R
 import io.github.johnny2103.novagalerie.data.MediaDetails
 import io.github.johnny2103.novagalerie.data.MediaItem
+import io.github.johnny2103.novagalerie.data.MediaSource
 import io.github.johnny2103.novagalerie.data.MetadataReader
+import io.github.johnny2103.novagalerie.data.db.PersonEntity
+import io.github.johnny2103.novagalerie.data.index.CountryLookup
 import io.github.johnny2103.novagalerie.ui.GalleryViewModel
+import io.github.johnny2103.novagalerie.ui.components.FaceAvatar
+import io.github.johnny2103.novagalerie.ui.components.TagDialog
 import io.github.johnny2103.novagalerie.ui.components.VideoPlayer
 import io.github.johnny2103.novagalerie.ui.components.ZoomableImage
-import io.github.johnny2103.novagalerie.ui.components.rememberDeleteHandler
+import io.github.johnny2103.novagalerie.ui.components.rememberMediaRequestHandler
 import io.github.johnny2103.novagalerie.util.Format
 import io.github.johnny2103.novagalerie.util.MediaActions
 import io.github.johnny2103.novagalerie.util.findActivity
+import kotlinx.coroutines.delay
 
 @Composable
 fun ViewerScreen(
     viewModel: GalleryViewModel,
     startIndex: Int,
     onBack: () -> Unit,
+    onOpenPerson: (Long) -> Unit,
 ) {
     val context = LocalContext.current
     val items by viewModel.viewerItems.collectAsStateWithLifecycle()
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val source by viewModel.viewerSource.collectAsStateWithLifecycle()
+    val isTrash = source is MediaSource.Trash
 
     if (items.isEmpty()) {
         LaunchedEffect(Unit) { onBack() }
@@ -104,7 +121,9 @@ fun ViewerScreen(
     var showUi by rememberSaveable { mutableStateOf(true) }
     var showInfo by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
-    val deleteItems = rememberDeleteHandler { }
+    var showTags by remember { mutableStateOf(false) }
+    var slideshow by remember { mutableStateOf(false) }
+    val requests = rememberMediaRequestHandler { if (isTrash) viewModel.loadTrash() }
 
     // Immersive mode while the chrome is hidden.
     val view = LocalView.current
@@ -114,6 +133,33 @@ fun ViewerScreen(
         controller?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         if (showUi) controller?.show(WindowInsetsCompat.Type.systemBars()) else controller?.hide(WindowInsetsCompat.Type.systemBars())
         onDispose { controller?.show(WindowInsetsCompat.Type.systemBars()) }
+    }
+
+    // Slideshow: advance automatically, keep the screen on, stop at the end or on tap.
+    DisposableEffect(slideshow) {
+        view.keepScreenOn = slideshow
+        onDispose { view.keepScreenOn = false }
+    }
+    LaunchedEffect(slideshow, settings.slideshowSeconds) {
+        if (!slideshow) return@LaunchedEffect
+        showUi = false
+        while (true) {
+            delay(settings.slideshowSeconds * 1000L)
+            val next = pagerState.currentPage + 1
+            if (next > pagerState.pageCount - 1) {
+                slideshow = false
+                break
+            }
+            pagerState.animateScrollToPage(next)
+        }
+    }
+
+    val onTap: () -> Unit = {
+        if (slideshow) {
+            slideshow = false
+        } else {
+            showUi = !showUi
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
@@ -126,13 +172,9 @@ fun ViewerScreen(
             val item = items[page]
             val isCurrent = pagerState.currentPage == page
             if (item.isVideo) {
-                if (isCurrent) {
-                    VideoPlayer(uri = item.uri, autoPlay = true)
-                } else {
-                    Box(Modifier.fillMaxSize())
-                }
+                if (isCurrent) VideoPlayer(uri = item.uri, autoPlay = true) else Box(Modifier.fillMaxSize())
             } else {
-                ZoomableImage(item = item, resetKey = isCurrent, onTap = { showUi = !showUi })
+                ZoomableImage(item = item, resetKey = isCurrent, onTap = onTap)
             }
         }
 
@@ -142,33 +184,35 @@ fun ViewerScreen(
             exit = fadeOut() + slideOutVertically { -it },
             modifier = Modifier.align(Alignment.TopCenter),
         ) {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(current.displayName.ifBlank { stringResource(R.string.external_item) }, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
-                        Text(Format.dateTime(current.dateMs), style = MaterialTheme.typography.bodySmall)
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back)) }
-                },
-                actions = {
-                    if (!current.isExternal) {
-                        IconButton(onClick = { viewModel.toggleFavorite(current.id) }) {
-                            Icon(
-                                if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                                contentDescription = stringResource(if (isFavorite) R.string.action_unfavorite else R.string.action_favorite),
-                            )
+            Box(modifier = Modifier.background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.7f), 1f to Color.Transparent))) {
+                TopAppBar(
+                    title = {
+                        Column {
+                            Text(current.displayName.ifBlank { stringResource(R.string.external_item) }, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
+                            Text(Format.dateTime(current.dateMs), style = MaterialTheme.typography.bodySmall)
                         }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Black.copy(alpha = 0.55f),
-                    titleContentColor = Color.White,
-                    navigationIconContentColor = Color.White,
-                    actionIconContentColor = Color.White,
-                ),
-            )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back)) }
+                    },
+                    actions = {
+                        if (!current.isExternal && !isTrash) {
+                            IconButton(onClick = { viewModel.toggleFavorite(current.id) }) {
+                                Icon(
+                                    if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                                    contentDescription = stringResource(if (isFavorite) R.string.action_unfavorite else R.string.action_favorite),
+                                )
+                            }
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                        titleContentColor = Color.White,
+                        navigationIconContentColor = Color.White,
+                        actionIconContentColor = Color.White,
+                    ),
+                )
+            }
         }
 
         AnimatedVisibility(
@@ -180,37 +224,63 @@ fun ViewerScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color.Black.copy(alpha = 0.55f))
+                    .background(Brush.verticalGradient(0f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.75f)))
                     .windowInsetsPadding(WindowInsets.navigationBars)
                     .padding(horizontal = 8.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                ViewerAction(Icons.Filled.Share, R.string.action_share) { MediaActions.share(context, listOf(current)) }
-                ViewerAction(Icons.Filled.Edit, R.string.action_edit) { MediaActions.edit(context, current) }
-                ViewerAction(Icons.Filled.Info, R.string.action_info) { showInfo = true }
-                if (!current.isExternal) {
-                    ViewerAction(Icons.Filled.Delete, R.string.action_delete) { deleteItems(listOf(current)) }
-                }
-                Box {
-                    ViewerAction(Icons.Filled.MoreVert, R.string.action_more) { showMenu = true }
-                    DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                        if (!current.isVideo) {
+                if (isTrash) {
+                    ViewerAction(Icons.Filled.RestoreFromTrash, R.string.action_restore) { requests.restore(listOf(current)) }
+                    ViewerAction(Icons.Filled.Info, R.string.action_info) { showInfo = true }
+                    ViewerAction(Icons.Filled.DeleteForever, R.string.action_delete_forever) { requests.delete(listOf(current)) }
+                } else {
+                    ViewerAction(Icons.Filled.Share, R.string.action_share) { MediaActions.share(context, listOf(current)) }
+                    ViewerAction(Icons.Filled.Edit, R.string.action_edit) { MediaActions.edit(context, current) }
+                    ViewerAction(Icons.Filled.Info, R.string.action_info) { showInfo = true }
+                    if (!current.isExternal) {
+                        ViewerAction(Icons.Filled.Delete, if (settings.useTrash && MediaActions.isTrashSupported()) R.string.action_trash else R.string.action_delete) {
+                            if (settings.useTrash) requests.trash(listOf(current)) else requests.delete(listOf(current))
+                        }
+                    }
+                    Box {
+                        ViewerAction(Icons.Filled.MoreVert, R.string.action_more) { showMenu = true }
+                        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                            if (items.size > 1) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.action_slideshow)) },
+                                    onClick = {
+                                        showMenu = false
+                                        slideshow = true
+                                    },
+                                )
+                            }
+                            if (!current.isExternal) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.action_tags)) },
+                                    onClick = {
+                                        showMenu = false
+                                        showTags = true
+                                    },
+                                )
+                            }
+                            if (!current.isVideo) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.action_set_wallpaper)) },
+                                    onClick = {
+                                        showMenu = false
+                                        MediaActions.setWallpaper(context, current)
+                                    },
+                                )
+                            }
                             DropdownMenuItem(
-                                text = { Text(stringResource(R.string.action_set_wallpaper)) },
+                                text = { Text(stringResource(R.string.action_open_with)) },
                                 onClick = {
                                     showMenu = false
-                                    MediaActions.setWallpaper(context, current)
+                                    MediaActions.openWith(context, current)
                                 },
                             )
                         }
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.action_open_with)) },
-                            onClick = {
-                                showMenu = false
-                                MediaActions.openWith(context, current)
-                            },
-                        )
                     }
                 }
             }
@@ -220,24 +290,59 @@ fun ViewerScreen(
     if (showInfo) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ModalBottomSheet(onDismissRequest = { showInfo = false }, sheetState = sheetState) {
-            DetailsSheet(item = current)
+            DetailsSheet(
+                viewModel = viewModel,
+                item = current,
+                onOpenPerson = {
+                    showInfo = false
+                    onOpenPerson(it)
+                },
+                onEditTags = { showTags = true },
+            )
         }
+    }
+
+    if (showTags) {
+        TagDialog(viewModel = viewModel, mediaIds = listOf(current.id), onDismiss = { showTags = false })
     }
 }
 
 @Composable
-private fun ViewerAction(icon: androidx.compose.ui.graphics.vector.ImageVector, labelRes: Int, onClick: () -> Unit) {
+private fun ViewerAction(icon: ImageVector, labelRes: Int, onClick: () -> Unit) {
     IconButton(onClick = onClick) {
         Icon(icon, contentDescription = stringResource(labelRes), tint = Color.White)
     }
 }
 
 @Composable
-private fun DetailsSheet(item: MediaItem) {
+private fun DetailsSheet(
+    viewModel: GalleryViewModel,
+    item: MediaItem,
+    onOpenPerson: (Long) -> Unit,
+    onEditTags: () -> Unit,
+) {
     val context = LocalContext.current
+    val people by viewModel.people.collectAsStateWithLifecycle()
+    val tags by viewModel.tags.collectAsStateWithLifecycle()
+    val mediaTagIds by viewModel.mediaTagIds.collectAsStateWithLifecycle()
+    val unnamed = stringResource(R.string.people_unnamed)
+
     val details by produceState<MediaDetails?>(initialValue = null, key1 = item) {
         value = MetadataReader.read(context, item)
     }
+    val personsOnPhoto by produceState<List<PersonEntity>>(initialValue = emptyList(), key1 = item, key2 = people) {
+        if (item.isExternal) return@produceState
+        val ids = viewModel.facesForMedia(item.id).mapNotNull { it.personId }.toSet()
+        value = people.filter { it.id in ids && !it.hidden }
+    }
+    val country by produceState<String?>(initialValue = null, key1 = item) {
+        if (!item.isExternal) value = viewModel.metaFor(item.id)?.country
+    }
+    val itemTags = remember(tags, mediaTagIds, item) {
+        val ids = mediaTagIds[item.id] ?: emptySet()
+        tags.filter { it.id in ids }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -246,6 +351,30 @@ private fun DetailsSheet(item: MediaItem) {
     ) {
         Text(stringResource(R.string.details_title), style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.height(12.dp))
+
+        if (personsOnPhoto.isNotEmpty()) {
+            Label(stringResource(R.string.detail_people))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                personsOnPhoto.forEach { p ->
+                    AssistChip(
+                        onClick = { onOpenPerson(p.id) },
+                        label = { Text(p.name ?: unnamed) },
+                        leadingIcon = { FaceAvatar(file = viewModel.faceFile(p.coverFaceId), size = 24.dp) },
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+
+        if (!item.isExternal) {
+            Label(stringResource(R.string.detail_tags))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                itemTags.forEach { t -> AssistChip(onClick = onEditTags, label = { Text(t.name) }) }
+                TextButton(onClick = onEditTags) { Text(stringResource(R.string.tag_add)) }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+
         val d = details
         if (d == null) {
             Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
@@ -254,8 +383,14 @@ private fun DetailsSheet(item: MediaItem) {
         } else {
             d.rows.forEach { row ->
                 Column(modifier = Modifier.padding(vertical = 6.dp)) {
-                    Text(stringResource(row.labelRes), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Label(stringResource(row.labelRes))
                     Text(row.value, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+            country?.let {
+                Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                    Label(stringResource(R.string.detail_country))
+                    Text(CountryLookup.displayName(it), style = MaterialTheme.typography.bodyMedium)
                 }
             }
             if (d.latitude != null && d.longitude != null) {
@@ -265,4 +400,9 @@ private fun DetailsSheet(item: MediaItem) {
             }
         }
     }
+}
+
+@Composable
+private fun Label(text: String) {
+    Text(text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }

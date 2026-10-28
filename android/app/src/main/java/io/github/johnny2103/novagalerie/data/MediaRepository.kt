@@ -7,6 +7,7 @@ import android.database.ContentObserver
 import android.database.Cursor
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
@@ -40,7 +41,14 @@ class MediaRepository(context: Context) {
         awaitClose { resolver.unregisterContentObserver(observer) }
     }.conflate()
 
-    suspend fun loadAll(): List<MediaItem> = withContext(Dispatchers.IO) {
+    suspend fun loadAll(): List<MediaItem> = withContext(Dispatchers.IO) { query(trashed = false) }
+
+    /** Items in the system trash (Android 11+); empty on older versions. */
+    suspend fun loadTrashed(): List<MediaItem> = withContext(Dispatchers.IO) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) query(trashed = true) else emptyList()
+    }
+
+    private fun query(trashed: Boolean): List<MediaItem> {
         val projection = buildList {
             add(MediaStore.Files.FileColumns._ID)
             add(MediaStore.Files.FileColumns.DISPLAY_NAME)
@@ -69,7 +77,17 @@ class MediaRepository(context: Context) {
 
         val items = ArrayList<MediaItem>(1024)
         val cursor = try {
-            resolver.query(filesUri, projection, selection, args, sort)
+            if (trashed && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val bundle = Bundle().apply {
+                    putString(ContentResolver.QUERY_ARG_SQL_SELECTION, selection)
+                    putStringArray(ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS, args)
+                    putString(ContentResolver.QUERY_ARG_SQL_SORT_ORDER, sort)
+                    putInt(MediaStore.QUERY_ARG_MATCH_TRASHED, MediaStore.MATCH_ONLY)
+                }
+                resolver.query(filesUri, projection, bundle, null)
+            } else {
+                resolver.query(filesUri, projection, selection, args, sort)
+            }
         } catch (e: SecurityException) {
             null
         }
@@ -135,7 +153,7 @@ class MediaRepository(context: Context) {
             }
         }
         items.sortByDescending { it.dateMs }
-        items
+        return items
     }
 
     /** Builds a MediaItem for a content:// or file:// URI received from another app. */

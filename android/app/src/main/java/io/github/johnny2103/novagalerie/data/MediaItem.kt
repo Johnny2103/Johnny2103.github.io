@@ -38,6 +38,11 @@ sealed interface MediaSource {
     data object All : MediaSource
     data class AlbumSource(val bucketId: Long) : MediaSource
     data object Favorites : MediaSource
+    data object Videos : MediaSource
+    data object Trash : MediaSource
+    data class Person(val personId: Long) : MediaSource
+    data class Country(val name: String) : MediaSource
+    data class Tag(val tagId: Long) : MediaSource
     data class Search(val query: String, val filter: TypeFilter) : MediaSource
     data class External(val item: MediaItem) : MediaSource
 }
