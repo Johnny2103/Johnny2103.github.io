@@ -29,6 +29,8 @@ jobs:
   build:
     name: Build & release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -86,17 +88,30 @@ jobs:
           path: ${{ env.APK_NAME }}
           if-no-files-found: error
 
+      - name: Check token permissions
+        if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && inputs.publish)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # A 403 here means the workflow token has no "contents: write" permission
+          # (Settings → Actions → General → Workflow permissions → "Read and write permissions").
+          gh api -X POST "repos/${{ github.repository }}/releases/generate-notes" -f tag_name="app-v${APP_VERSION}" \
+            -f target_commitish="${{ github.sha }}" --jq '.name' \
+            && echo "Token can access the releases API."
+
       - name: Publish GitHub release
         if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && inputs.publish)
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: app-v${{ env.APP_VERSION }}
-          name: Nova Galerie ${{ env.APP_VERSION }}
-          target_commitish: ${{ github.sha }}
-          make_latest: true
-          files: ${{ env.APK_NAME }}
-          body: |
-            Nova Galerie ${{ env.APP_VERSION }} – automatisch gebaut aus `${{ github.ref_name }}` (`${{ github.sha }}`).
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="app-v${APP_VERSION}"
+          NOTES="Nova Galerie ${APP_VERSION} – automatisch gebaut aus \`${{ github.ref_name }}\` (\`${{ github.sha }}\`).
 
-            **Installation:** `NovaGalerie.apk` herunterladen, öffnen und die Installation aus unbekannten Quellen erlauben.
-            Dauerhafter Download-Link: https://github.com/${{ github.repository }}/releases/latest/download/NovaGalerie.apk
+          **Installation:** \`NovaGalerie.apk\` herunterladen, öffnen und die Installation aus unbekannten Quellen erlauben.
+          Dauerhafter Download-Link: https://github.com/${{ github.repository }}/releases/latest/download/NovaGalerie.apk"
+          gh release create "$TAG" "$APK_NAME" \
+            --repo "${{ github.repository }}" \
+            --target "${{ github.sha }}" \
+            --title "Nova Galerie ${APP_VERSION}" \
+            --notes "$NOTES" \
+            --latest
