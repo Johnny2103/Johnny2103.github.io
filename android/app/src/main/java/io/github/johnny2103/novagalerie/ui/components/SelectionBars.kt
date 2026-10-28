@@ -136,12 +136,15 @@ fun rememberDeleteHandler(onDeleted: () -> Unit): (List<MediaItem>) -> Unit {
         )
     }
 
-    return remember {
-        { items: List<MediaItem> ->
-            if (items.isNotEmpty()) {
-                // Android 11+ shows its own confirmation dialog; older versions get ours.
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) perform(items) else confirmItems = items
-            }
+    fun request(items: List<MediaItem>) {
+        if (items.isEmpty()) return
+        // Android 11+ shows its own confirmation dialog; older versions get ours.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            perform(items)
+        } else {
+            confirmItems = items
         }
     }
+
+    return { items -> request(items) }
 }
